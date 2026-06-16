@@ -28,6 +28,16 @@ jobs:
       - name: config.json 생성 (키는 Secret에서 주입)
         run: cp config.example.json config.json
 
+      - name: 키 주입 확인 (값은 노출 안 함)
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: |
+          if [ -z "$POLYGON_API_KEY" ]; then
+            echo "::error::POLYGON_API_KEY Secret이 비어있거나 없습니다. Settings → Secrets and variables → Actions → Repository secrets 에 'POLYGON_API_KEY' 로 등록했는지 확인하세요."
+            exit 1
+          fi
+          echo "키 주입 확인됨 (길이: ${#POLYGON_API_KEY}자)"
+
       - name: 눌림목 스캔 (오늘 후보 추출)
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
