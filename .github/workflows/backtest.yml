@@ -1,0 +1,56 @@
+name: pullback-backtest
+
+# 수동 실행 전용(Actions 탭 → Run workflow). 눌림목 셋업 60~90일 확대 백테스트.
+# 무료 Polygon 5콜/분 제약상 13초 슬립 → 거래일 수만큼 시간 소요(약 15~20분).
+on:
+  workflow_dispatch:
+    inputs:
+      n_calendar:
+        description: "수집할 달력일 수 (거래일은 약 70%; 95≈68거래일≈60신호일)"
+        required: false
+        default: "95"
+
+permissions:
+  contents: write   # 결과 CSV를 레포에 커밋하기 위해 필요
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout (캐시 포함)
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: config.json 생성 (키는 Secret에서 주입)
+        run: cp config.example.json config.json
+
+      - name: 키 주입 확인 (값은 노출 안 함)
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: |
+          if [ -z "$POLYGON_API_KEY" ]; then
+            echo "::error::POLYGON_API_KEY Secret이 비어있거나 없습니다."
+            exit 1
+          fi
+          echo "키 주입 확인됨 (길이: ${#POLYGON_API_KEY}자)"
+
+      - name: 눌림목 확대 백테스트
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: python pullback_backtest.py "${{ github.event.inputs.n_calendar }}"
+
+      - name: 결과 커밋 & 푸시 (백테스트 결과 + grouped 캐시)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/
+          git diff --staged --quiet || git commit -m "pullback backtest (UTC $(date -u +%F))"
+          git push
