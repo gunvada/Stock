@@ -1,0 +1,14 @@
+# API 키가 든 로컬 설정은 절대 커밋 금지 (Secrets로만 주입)
+config.json
+
+# 캐시는 클라우드에서 매번 재수집 (레포 비대 방지)
+output/cache/
+
+# 로컬 산출물
+logs/
+__pycache__/
+*.pyc
+tmp_*.py
+
+# 로컬 Claude 설정 (프로젝트 무관)
+.claude/

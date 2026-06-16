@@ -1,0 +1,20 @@
+{
+  "polygon_api_key": "여기에_POLYGON_무료_API_KEY_입력",
+  "finnhub_api_key": "선택사항_없으면_빈문자열",
+
+  "scan": {
+    "lookback_trading_days": 7,
+    "volume_surge_threshold": 50.0,
+    "watch_threshold": 10.0,
+
+    "price_min": 0.30,
+    "price_max": 20.0,
+
+    "min_baseline_avg_volume": 50000,
+    "min_latest_volume": 300000,
+    "min_latest_dollar_volume": 1000000,
+
+    "baseline_method": "median",
+    "top_n": 40
+  }
+}
