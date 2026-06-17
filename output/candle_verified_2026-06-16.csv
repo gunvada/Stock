@@ -1,8 +1,8 @@
-﻿ticker,score,pass,bars,down_from_high_%,from_low_x,base_ratio,candle,enough_history,deep_decline,near_base,sideways_base,bullish_candle
-BEEM,4,True,751,89.0,1.2,2.8,-,1,1,1,1,0
-NIVF,3,False,750,100.0,1.2,1502.0,-,1,1,1,0,0
-WNW,3,False,750,100.0,1.4,116.3,도지,1,1,1,0,0
-SNWV,3,False,415,82.0,1.0,3.0,-,0,1,1,1,0
-BTTC,2,False,177,98.0,1.0,25.8,-,0,1,1,0,0
-AHMA,1,False,164,93.0,3.6,46.7,-,0,1,0,0,0
-CAMP,1,False,420,66.0,3.2,5.3,-,0,1,0,0,0
+﻿ticker,pass,n_signals,recent_signals,last_candle
+SNWV,True,2,"작은몸통양꼬리양봉@D-3, 작은몸통양꼬리양봉@D-2",-
+BEEM,True,1,작은몸통양꼬리양봉@D-3,-
+AHMA,True,1,위꼬리양봉@D-4,-
+NIVF,False,0,-,-
+WNW,False,0,-,도지
+BTTC,False,0,-,-
+CAMP,False,0,-,-

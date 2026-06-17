@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-캔들-베이스 교차검증 점수 로직 테스트 (네트워크 불필요 — 순수 score 함수만).
+캔들 교차검증(시그널·모양) 로직 테스트 (네트워크 불필요 — 순수 함수).
 실행: python tests/test_candle_verify.py
 """
 import os
@@ -10,44 +10,42 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import candle_verify as cv
 
-
-def _m(bars=600, hi=100.0, lo=1.0, last=1.2, base_ratio=2.0, bullish=True):
-    return {"bars": bars, "hi_all": hi, "lo_all": lo, "last": last,
-            "base_ratio": base_ratio, "bullish": bullish}
-
-
-def test_ideal_base_passes():
-    # 깊은하락(1.2 ≤ 100*0.5) + 베이스근처(1.2 ≤ 1*1.5) + 수평(2.0) + 충분바 + 상승캔들
-    checks, score = cv.score_candle_base(_m())
-    assert score == 5 and all(checks.values())
+# 캔들 샘플
+NEUTRAL = (10, 11.0, 9.0, 9.5)          # 음봉, 양꼬리 → 상승신호 아님
+YANG_SPRING = (10, 10.92, 9.95, 10.90)  # 양봉스프링(상승)
+UWICK_YANG = (10, 10.81, 9.97, 10.40)   # 위꼬리양봉(상승)
 
 
-def test_run_up_fails_near_base():
-    # 저점 대비 3배(=near_base 실패), 고점에선 충분히 하락
-    checks, score = cv.score_candle_base(_m(lo=1.0, last=3.0))
-    assert checks["near_base"] is False
-    assert checks["deep_decline"] is True  # 3.0 ≤ 100*0.5
+def test_signal_on_latest():
+    ohlc = [NEUTRAL, NEUTRAL, YANG_SPRING]
+    sigs = cv.recent_bullish_signals(ohlc, lookback=5)
+    assert len(sigs) == 1 and sigs[0]["offset"] == 0
+    assert "양봉스프링" in sigs[0]["labels"]
 
 
-def test_not_declined_fails_deep_decline():
-    # 고점 근처(현재가 = 고점의 90%) → deep_decline 실패
-    checks, score = cv.score_candle_base(_m(hi=10.0, lo=8.0, last=9.0, base_ratio=1.2))
-    assert checks["deep_decline"] is False
+def test_signal_within_window_offset():
+    ohlc = [YANG_SPRING, NEUTRAL, NEUTRAL]  # 신호가 2일 전(offset=2)
+    sigs = cv.recent_bullish_signals(ohlc, lookback=5)
+    assert len(sigs) == 1 and sigs[0]["offset"] == 2
 
 
-def test_short_history_fails():
-    checks, score = cv.score_candle_base(_m(bars=100))
-    assert checks["enough_history"] is False
+def test_no_signal():
+    ohlc = [NEUTRAL, NEUTRAL, NEUTRAL]
+    assert cv.recent_bullish_signals(ohlc, lookback=5) == []
 
 
-def test_choppy_fails_sideways():
-    checks, score = cv.score_candle_base(_m(base_ratio=8.0))
-    assert checks["sideways_base"] is False
+def test_lookback_excludes_old_signal():
+    # 신호가 lookback 밖(가장 오래된)이면 제외
+    ohlc = [YANG_SPRING, NEUTRAL, NEUTRAL, NEUTRAL]
+    assert cv.recent_bullish_signals(ohlc, lookback=2) == []
 
 
-def test_no_bullish_candle():
-    checks, score = cv.score_candle_base(_m(bullish=False))
-    assert checks["bullish_candle"] is False and score == 4
+def test_multiple_signals():
+    ohlc = [UWICK_YANG, NEUTRAL, YANG_SPRING]
+    sigs = cv.recent_bullish_signals(ohlc, lookback=5)
+    assert len(sigs) == 2
+    offsets = sorted(s["offset"] for s in sigs)
+    assert offsets == [0, 2]
 
 
 def _run():
