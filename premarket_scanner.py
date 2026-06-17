@@ -72,9 +72,10 @@ def load_universe(top_n, require_verdicts=None):
     df = pd.read_csv(src)
     # surge: ticker,ratio,latest_close / pullback: ticker,c
     close_col = "latest_close" if "latest_close" in df.columns else "c"
-    rank_col = "ratio" if "ratio" in df.columns else ("vol_ratio" if "vol_ratio" in df.columns else None)
-    if rank_col:
-        df = df.sort_values(rank_col, ascending=False)
+
+    # Polygon 테스트 심볼 제외(recommend.py 와 동일)
+    TEST_TICKERS = {"ZVZZT", "ZWZZT", "ZXYZ.A", "ZBZX", "ZJZZT", "ZTST", "ZXZZT", "ZVV"}
+    df = df[~df["ticker"].isin(TEST_TICKERS)]
 
     # 캔들 신호 필터 (컬럼 존재 시에만)
     note = ""
@@ -84,6 +85,20 @@ def load_universe(top_n, require_verdicts=None):
         note = f" · 캔들신호 {require_verdicts} 부합 {len(df)}/{before}"
     elif require_verdicts:
         note = " · (candle_signal 컬럼 없음 → 신호필터 미적용)"
+
+    # 정렬: recommend.py 와 동일한 '종합점수'(마감강도+신호형태+추세위치+폭증배율)로 통일.
+    # candle_score 가 있으면 rank_score = candle_score + log10(ratio), 없으면 ratio 폴백.
+    import numpy as np
+    if "candle_score" in df.columns and "ratio" in df.columns:
+        df = df.copy()
+        df["rank_score"] = (df["candle_score"]
+                            + np.log10(df["ratio"].clip(lower=1))).round(2)
+        df = df.sort_values("rank_score", ascending=False)
+        note += " · 정렬=종합점수"
+    else:
+        rank_col = "ratio" if "ratio" in df.columns else ("vol_ratio" if "vol_ratio" in df.columns else None)
+        if rank_col:
+            df = df.sort_values(rank_col, ascending=False)
 
     keep_cols = ["ticker", close_col]
     if "candle_signal" in df.columns:
