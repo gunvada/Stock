@@ -38,6 +38,8 @@
   "timing_study": {
     "lookback_trading_days": 120,
     "universe_top_n": 20,
+    "exit_mode": "open",
+    "signal_bar_minutes": 30,
     "tp_pct": 10.0,
     "stop_pct": 8.0,
     "cost_pct": 2.5,

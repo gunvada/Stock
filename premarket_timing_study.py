@@ -7,19 +7,21 @@
 기반, candle_signals.py)와 결합해 ET 30분 버킷별 기대수익을 집계한다.
 
 설계(확정):
-  · 청산   : 프리마켓 창 안에서 +TP%/-STOP% 먼저 터치한 쪽으로 청산,
-             둘 다 미터치면 09:30 개장가(ET) 청산. (왕복비용 차감)
-             같은 분봉서 고·저 둘 다 터치 시 보수적으로 손절 우선.
-  · 타점   : ET 절대 시간대 30분 버킷(05:30/06:00/…/09:00) × 캔들 신호 결합.
+  · 청산   : 순수 09:30 개장가(ET) 청산. 버킷 시각 진입 → 개장가 청산의 순수
+             수익률만 측정해 타점 비교를 깨끗하게 한다(경로의존 TP/SL 미적용).
+             (config exit_mode="tp_sl" 로 바꾸면 TP/SL 우선 모드도 가능.)
+  · 타점   : ET 절대 시간대 30분 버킷(05:30/06:00/…/09:00) ×
+             진입 직전 마감된 30분봉 캔들 신호(분봉 시그널) 결합.
   · 유니버스: ① 폭증 후보 전체  vs  ② 캔들신호+갭 부합 프리마켓 추천 픽 — 둘 다 비교.
   · 데이터 : Polygon 분봉 애그리거트(확장시간 포함, 2년 history, 무료 5req/분).
+             1분봉을 받아 30분봉(signal_bar_minutes)으로 리샘플해 분봉 신호 산출.
              ※ yfinance 1분봉은 ~7일만 제공 → 120일 불가하여 Polygon 사용.
              grouped daily / 분봉 모두 output/cache 에 캐싱(재실행 시 무호출).
 
 산출:
-  output/timing_study_detail.csv   (후보×버킷 단위 시뮬 결과)
-  output/timing_study_buckets.csv  (버킷×유니버스×캔들신호 집계)
-  콘솔: 유니버스별 최적 타점 버킷 + 캔들신호 결합 표
+  output/timing_study_detail.csv   (후보×버킷 단위 시뮬 결과, 분봉신호 포함)
+  output/timing_study_buckets.csv  (버킷×유니버스 집계)
+  콘솔: 유니버스별 최적 타점 버킷 + 버킷×30분봉 캔들신호 결합 표
 
 사용법:
   python premarket_timing_study.py            # 최근 120거래일 통계 검증(키 필요)
@@ -61,8 +63,10 @@ def ts_config(cfg):
     ts = cfg.setdefault("timing_study", {})
     ts.setdefault("lookback_trading_days", 120)
     ts.setdefault("universe_top_n", 20)        # 신호일별 폭증 상위 N만 평가
-    ts.setdefault("tp_pct", 10.0)
-    ts.setdefault("stop_pct", 8.0)
+    ts.setdefault("exit_mode", "open")         # "open"=09:30 개장가 청산 / "tp_sl"
+    ts.setdefault("signal_bar_minutes", 30)    # 분봉 캔들 신호 기준(10/20/30)
+    ts.setdefault("tp_pct", 10.0)              # exit_mode="tp_sl" 일 때만 사용
+    ts.setdefault("stop_pct", 8.0)             # exit_mode="tp_sl" 일 때만 사용
     ts.setdefault("cost_pct", 2.5)             # 왕복 비용
     ts.setdefault("gap_min_pct", 5.0)          # 추천 픽 갭 기준(05:30 기준가 vs 전일종가)
     ts.setdefault("require_verdicts", ["강한매수", "매수관심"])
@@ -78,12 +82,14 @@ def _hm(s):
     return int(h) * 60 + int(m)
 
 
-def simulate_bucket(bars, bucket, tp_pct, stop_pct, cost_pct, open_px):
+def simulate_bucket(bars, bucket, ts, open_px):
     """
     bars: [{'min':'HH:MM','o','h','l','c'}, ...] 프리마켓 분봉(시간 오름차순, <09:30)
     bucket: 진입 버킷 시작 'HH:MM'.  진입가 = 버킷 시작 이후 첫 봉의 시가.
-    창 안에서 TP/STOP 먼저 터치한 쪽으로 청산, 미터치면 open_px(09:30 개장가)로 청산.
-    같은 봉서 둘 다 터치 시 손절 우선(보수적).
+
+    exit_mode="open"  : 09:30 개장가(open_px)로 청산. 순수 수익률(경로의존 없음).
+    exit_mode="tp_sl" : 창 안에서 +TP%/-STOP% 먼저 터치한 쪽으로, 미터치면 개장가.
+                        같은 봉서 양쪽 터치 시 손절 우선(보수적).
     반환: dict(entry, outcome, gross_%, net_%)  또는 None(진입 불가).
     """
     bstart = _hm(bucket)
@@ -93,35 +99,70 @@ def simulate_bucket(bars, bucket, tp_pct, stop_pct, cost_pct, open_px):
     entry = float(seq[0]["o"])
     if entry <= 0:
         return None
-    tp_px = entry * (1 + tp_pct / 100)
-    sl_px = entry * (1 - stop_pct / 100)
+    cost_pct = ts["cost_pct"]
 
-    outcome, gross = "open", None
-    for b in seq:
-        hi, lo = float(b["h"]), float(b["l"])
-        hit_tp, hit_sl = hi >= tp_px, lo <= sl_px
-        if hit_sl:                      # 손절 우선(같은 봉 양쪽 터치 포함)
-            outcome, gross = "stop", -stop_pct
-            break
-        if hit_tp:
-            outcome, gross = "tp", tp_pct
-            break
-    if gross is None:                   # 미터치 → 개장가 청산
+    if ts.get("exit_mode", "open") == "tp_sl":
+        tp_px = entry * (1 + ts["tp_pct"] / 100)
+        sl_px = entry * (1 - ts["stop_pct"] / 100)
+        outcome, gross = None, None
+        for b in seq:
+            hi, lo = float(b["h"]), float(b["l"])
+            if lo <= sl_px:             # 손절 우선(같은 봉 양쪽 터치 포함)
+                outcome, gross = "stop", -ts["stop_pct"]
+                break
+            if hi >= tp_px:
+                outcome, gross = "tp", ts["tp_pct"]
+                break
+        if gross is None:
+            exit_px = float(open_px) if open_px else float(seq[-1]["c"])
+            outcome, gross = "open", (exit_px - entry) / entry * 100
+    else:                               # 순수 09:30 개장가 청산
         exit_px = float(open_px) if open_px else float(seq[-1]["c"])
-        gross = (exit_px - entry) / entry * 100
+        outcome, gross = "open", (exit_px - entry) / entry * 100
+
     net = gross - cost_pct
     return {"entry": round(entry, 4), "outcome": outcome,
             "gross_%": round(gross, 2), "net_%": round(net, 2)}
 
 
+def resample_nmin(bars, n):
+    """프리마켓 1분봉 → n분봉 리스트 [{'min':시작HH:MM,'open','high','low','close'}].
+    경계는 자정 기준 n분 배수에 정렬(n=30이면 :00/:30)."""
+    groups = {}
+    for b in bars:
+        start = (_hm(b["min"]) // n) * n
+        groups.setdefault(start, []).append(b)
+    out = []
+    for start in sorted(groups):
+        g = groups[start]
+        out.append({"min": f"{start // 60:02d}:{start % 60:02d}",
+                    "open": float(g[0]["o"]),
+                    "high": max(float(x["h"]) for x in g),
+                    "low": min(float(x["l"]) for x in g),
+                    "close": float(g[-1]["c"])})
+    return out
+
+
+def intraday_signal(nbars, bucket, lookback=7):
+    """진입 버킷 직전까지 '마감된' n분봉으로 캔들 신호 판정 → verdict 문자열.
+    버킷 시작 이전(<bucket)에 완성된 봉만 사용(진입 시점에 알 수 있는 정보)."""
+    done = [b for b in nbars if _hm(b["min"]) < _hm(bucket)]
+    if len(done) < 4:
+        return "정보부족"
+    df = pd.DataFrame(done)
+    df["date"] = df["min"]              # evaluate 는 date 로 정렬(같은 날 HH:MM 사전순 OK)
+    return candle_signals.evaluate(df, lookback=lookback)["verdict"]
+
+
 def simulate_candidate(bars, open_px, ts):
-    """후보 1건을 모든 버킷에서 시뮬 → [{bucket, ...}] 리스트."""
+    """후보 1건을 모든 버킷에서 시뮬 → [{bucket, intraday_signal, ...}] 리스트."""
+    nbars = resample_nmin(bars, ts.get("signal_bar_minutes", 30))
     rows = []
     for bk in ts["buckets"]:
-        r = simulate_bucket(bars, bk, ts["tp_pct"], ts["stop_pct"],
-                            ts["cost_pct"], open_px)
+        r = simulate_bucket(bars, bk, ts, open_px)
         if r:
             r["bucket"] = bk
+            r["intraday_signal"] = intraday_signal(nbars, bk)
             rows.append(r)
     return rows
 
@@ -129,64 +170,71 @@ def simulate_candidate(bars, open_px, ts):
 # --------------------------------------------------------------------------- #
 # 집계
 # --------------------------------------------------------------------------- #
-def aggregate(detail, label):
-    """detail DataFrame → 버킷별 집계(거래수/순익평균/승률/TP·SL률)."""
+def aggregate(detail, label, with_tpsl=False):
+    """detail DataFrame → 버킷별 집계(거래수/순익평균/승률[/TP·SL률])."""
     if detail.empty:
         return pd.DataFrame()
     g = detail.groupby("bucket")
-    agg = g.agg(
-        거래수=("net_%", "size"),
-        순익평균=("net_%", "mean"),
-        승률=("net_%", lambda s: (s > 0).mean() * 100),
-        TP률=("outcome", lambda s: (s == "tp").mean() * 100),
-        SL률=("outcome", lambda s: (s == "stop").mean() * 100),
-    ).reset_index()
+    spec = {"거래수": ("net_%", "size"),
+            "순익평균": ("net_%", "mean"),
+            "승률": ("net_%", lambda s: (s > 0).mean() * 100)}
+    if with_tpsl:
+        spec["TP률"] = ("outcome", lambda s: (s == "tp").mean() * 100)
+        spec["SL률"] = ("outcome", lambda s: (s == "stop").mean() * 100)
+    agg = g.agg(**spec).reset_index()
     agg.insert(0, "유니버스", label)
-    for c in ["순익평균", "승률", "TP률", "SL률"]:
+    for c in [c for c in ["순익평균", "승률", "TP률", "SL률"] if c in agg.columns]:
         agg[c] = agg[c].round(1)
-    # 버킷 시간순 정렬
-    agg["_o"] = agg["bucket"].map(_hm)
+    agg["_o"] = agg["bucket"].map(_hm)        # 버킷 시간순 정렬
     return agg.sort_values("_o").drop(columns="_o").reset_index(drop=True)
 
 
 def summarize(detail_all, detail_filt, ts):
     """콘솔 출력 + 집계 CSV용 DataFrame 생성."""
-    a_all = aggregate(detail_all, "폭증후보전체")
-    a_filt = aggregate(detail_filt, "캔들+갭부합픽")
+    with_tpsl = ts.get("exit_mode", "open") == "tp_sl"
+    a_all = aggregate(detail_all, "폭증후보전체", with_tpsl)
+    a_filt = aggregate(detail_filt, "캔들+갭부합픽", with_tpsl)
     buckets = pd.concat([a_all, a_filt], ignore_index=True)
 
-    # 캔들신호 결합: 버킷×신호 (필터 전 전체 기준 — 신호별 타점 비교)
+    # 버킷 × 분봉(30분) 캔들 신호 결합 (폭증후보전체 기준 — 분봉 신호별 타점 비교)
     byverdict = pd.DataFrame()
-    if not detail_all.empty and "verdict" in detail_all.columns:
-        gv = detail_all.groupby(["bucket", "verdict"])
+    if not detail_all.empty and "intraday_signal" in detail_all.columns:
+        gv = detail_all.groupby(["bucket", "intraday_signal"])
         byverdict = gv.agg(거래수=("net_%", "size"),
                            순익평균=("net_%", "mean"),
                            승률=("net_%", lambda s: (s > 0).mean() * 100)).reset_index()
         byverdict["순익평균"] = byverdict["순익평균"].round(1)
         byverdict["승률"] = byverdict["승률"].round(1)
         byverdict["_o"] = byverdict["bucket"].map(_hm)
-        byverdict = byverdict.sort_values(["_o", "verdict"]).drop(columns="_o").reset_index(drop=True)
+        byverdict = byverdict.sort_values(["_o", "intraday_signal"]).drop(columns="_o").reset_index(drop=True)
     return buckets, byverdict
 
 
 def print_report(buckets, byverdict, ts, span):
+    if ts.get("exit_mode", "open") == "tp_sl":
+        exit_desc = (f"TP +{ts['tp_pct']:.0f}% / SL -{ts['stop_pct']:.0f}% 우선, "
+                     f"미터치 09:30 개장가")
+    else:
+        exit_desc = "순수 09:30 개장가 청산"
     print("\n" + "=" * 80)
     print(f"  프리마켓 최적 타점 타이밍 통계 검증  —  {span}")
-    print(f"  청산: TP +{ts['tp_pct']:.0f}% / SL -{ts['stop_pct']:.0f}% 우선, 미터치 09:30 개장가 / "
-          f"왕복비용 {ts['cost_pct']:.1f}%")
+    print(f"  청산: {exit_desc} / 왕복비용 {ts['cost_pct']:.1f}% / "
+          f"분봉신호 {ts.get('signal_bar_minutes', 30)}분봉")
     print("=" * 80)
     if buckets.empty:
         print("  집계할 거래가 없습니다.")
         return
+    base_cols = ["bucket", "거래수", "순익평균", "승률"]
+    extra = [c for c in ["TP률", "SL률"] if c in buckets.columns]
     for label in buckets["유니버스"].unique():
         sub = buckets[buckets["유니버스"] == label]
         print(f"\n  [{label}]  (버킷별 ET 진입시각)")
-        print(sub[["bucket", "거래수", "순익평균", "승률", "TP률", "SL률"]].to_string(index=False))
+        print(sub[base_cols + extra].to_string(index=False))
         best = sub.loc[sub["순익평균"].idxmax()]
         print(f"   → 최적 타점: {best['bucket']} ET  (순익평균 {best['순익평균']:+.1f}% · "
               f"승률 {best['승률']:.0f}% · n={int(best['거래수'])})")
     if not byverdict.empty:
-        print("\n  [버킷 × 캔들신호 결합]  (폭증후보전체 기준)")
+        print(f"\n  [버킷 × {ts.get('signal_bar_minutes', 30)}분봉 캔들신호 결합]  (폭증후보전체 기준)")
         print(byverdict.to_string(index=False))
     print("\n" + "-" * 80)
     print("  ※ 과거 통계는 미래를 보장하지 않습니다. 프리마켓은 유동성이 얇아 실제 체결가가")
