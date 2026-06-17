@@ -1,0 +1,65 @@
+name: premarket-momentum
+
+# 프리마켓 갭상승+거래량(활동) 모멘텀 파이프라인 — 본장(daily.yml)과 분리.
+# 회원 우선 매매창 KST 18:30~22:00 = ET 05:30~09:00(EDT).
+# 09:15 UTC(≈ KST 18:15, 창 직전)에 돌려 후보를 미리 띄운다.
+#   - 겨울(EST)엔 ET 기준 1시간 당겨지나 여전히 프리마켓 구간.
+on:
+  schedule:
+    - cron: "15 9 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  premarket:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: config.json 생성 (키는 Secret에서 주입)
+        run: cp config.example.json config.json
+
+      - name: 키 주입 확인
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: |
+          if [ -z "$POLYGON_API_KEY" ]; then
+            echo "::error::POLYGON_API_KEY Secret이 비어있거나 없습니다."
+            exit 1
+          fi
+          echo "키 주입 확인됨 (길이: ${#POLYGON_API_KEY}자)"
+
+      - name: 본장 유니버스 생성 (전일 급등 후보, Polygon)
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: python scanner.py
+
+      - name: 프리마켓 모멘텀 스캔 (yfinance, 키 불필요)
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: python premarket_scanner.py
+
+      - name: 전일 프리마켓 픽 채점
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: python premarket_verify.py
+
+      - name: 결과 커밋 & 푸시
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/
+          git diff --staged --quiet || git commit -m "premarket scan+verify (UTC $(date -u +%F))"
+          git push
