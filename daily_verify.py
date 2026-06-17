@@ -9,6 +9,7 @@ output/verification_ledger.csv 에 누적 기록한다. 이미 채점한 건 건
 비용: 왕복 수수료+슬리피지 2.5% 차감. 통계: 15거래일 표본 기준 룰.
 """
 import os
+import re
 import sys
 import glob
 import datetime as dt
@@ -89,6 +90,8 @@ def main():
     new_rows = []
     for path in sorted(glob.glob(os.path.join(scanner.OUTPUT_DIR, "pullback_*.csv"))):
         sig = os.path.basename(path)[len("pullback_"):-len(".csv")]
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", sig):
+            continue  # pullback_backtest_*.csv 등 '날짜형식이 아닌' 파일은 스킵
         if sig in done:
             continue
         picks = pd.read_csv(path)
