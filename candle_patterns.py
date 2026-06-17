@@ -106,6 +106,109 @@ def has_bullish_signal(o, h, l, c):
     return any(lbl in BULLISH_LABELS for lbl in detect(o, h, l, c))
 
 
+# =========================================================================== #
+# 다중 캔들(시퀀스) 패턴  —  STRATEGY_NOTES: 상승펀치·상승다람쥐·양봉팽이군·꼬리군
+#   입력은 (o,h,l,c) 캔들들의 리스트(오래된→최신).
+# =========================================================================== #
+def _g(c):
+    return geometry(*c)
+
+
+def is_lower_wick_yang(o, h, l, c):
+    """아래꼬리 양봉: 몸통 ≈ 아래꼬리, 위꼬리 짧은 양봉."""
+    g = geometry(o, h, l, c)
+    if not (g and g["bull"]):
+        return False
+    return (g["upper_r"] <= SHORT_WICK and g["lower_r"] >= UWICK_YANG_MIN
+            and abs(g["body_r"] - g["lower_r"]) <= BODY_UWICK_EQ)
+
+
+def _small_body(c):
+    g = geometry(*c)
+    return bool(g and g["body_r"] <= SMALL_BODY_MAX)
+
+
+def is_rising_punch(c1, c2):
+    """상승펀치: 위꼬리양봉 + 아래꼬리양봉 연속(큰 양봉군 선상에서 상승 성질)."""
+    return is_upper_wick_yang(*c1) and is_lower_wick_yang(*c2)
+
+
+def is_rising_squirrel(c1, c2, c3):
+    """상승다람쥐: (적당~큰)양봉 + 작은 음봉/도지 + 작은 양봉/양봉팽이."""
+    g1, g2, g3 = _g(c1), _g(c2), _g(c3)
+    if not (g1 and g2 and g3):
+        return False
+    return (g1["bull"] and g1["body_r"] >= 0.4              # 1봉: 양봉(적당~큼)
+            and g2["body_r"] <= SMALL_BODY_MAX and not g2["bull"]  # 2봉: 작은 음봉/도지
+            and g3["bull"] and g3["body_r"] <= SMALL_BODY_MAX)     # 3봉: 작은 양봉
+
+
+def is_paengi_group(candles):
+    """양봉 팽이군: 2~5개 연속 작은몸통, 다수가 양봉, 마지막은 양꼬리 양봉."""
+    if not (2 <= len(candles) <= 5):
+        return False
+    if not all(_small_body(c) for c in candles):
+        return False
+    bulls = sum(1 for c in candles if geometry(*c) and geometry(*c)["bull"])
+    return bulls >= len(candles) - 1 and is_small_body_two_wick_yang(*candles[-1])
+
+
+def is_tail_group(candles):
+    """꼬리군(이중/다중): 긴 위꼬리 캔들 2개+ 가 엇비슷한 고가대. 그 자체로 매수 신호."""
+    longs = [c for c in candles if (geometry(*c) and geometry(*c)["upper_r"] >= 0.40)]
+    if len(longs) < 2:
+        return False
+    highs = [c[1] for c in longs]
+    lo, hi = min(highs), max(highs)
+    return lo > 0 and (hi / lo - 1) <= 0.05   # 고가대 5% 이내로 모임
+
+
+# 다중 패턴 라벨(모두 상승 성질 신호)
+MULTI_BULLISH_LABELS = {"상승펀치", "상승다람쥐", "양봉팽이군", "꼬리군"}
+
+
+def detect_multi(ohlc, lookback=6):
+    """최근 lookback봉에서 다중 캔들 상승 패턴 탐지.
+    반환: [{'pattern': name, 'offset': 마지막봉의 D-오프셋}]. (offset 0 = 최신)"""
+    w = ohlc[-lookback:] if lookback else ohlc
+    n = len(w)
+    base = len(ohlc) - n            # 전역 인덱스 보정
+    found = []
+
+    def off(end_idx_global):
+        return (len(ohlc) - 1) - end_idx_global
+
+    # 2봉: 상승펀치
+    for i in range(n - 1):
+        if is_rising_punch(w[i], w[i + 1]):
+            found.append({"pattern": "상승펀치", "offset": off(base + i + 1)})
+    # 3봉: 상승다람쥐
+    for i in range(n - 2):
+        if is_rising_squirrel(w[i], w[i + 1], w[i + 2]):
+            found.append({"pattern": "상승다람쥐", "offset": off(base + i + 2)})
+    # 2~5봉: 양봉팽이군 (가장 긴 연속을 한 번만)
+    for size in range(5, 1, -1):
+        hit = False
+        for i in range(n - size + 1):
+            if is_paengi_group(w[i:i + size]):
+                found.append({"pattern": "양봉팽이군", "offset": off(base + i + size - 1)})
+                hit = True
+                break
+        if hit:
+            break
+    # 2~4봉: 꼬리군
+    for size in range(4, 1, -1):
+        hit = False
+        for i in range(n - size + 1):
+            if is_tail_group(w[i:i + size]):
+                found.append({"pattern": "꼬리군", "offset": off(base + i + size - 1)})
+                hit = True
+                break
+        if hit:
+            break
+    return found
+
+
 if __name__ == "__main__":
     demo = [
         ("양봉스프링", 10, 10.92, 9.95, 10.90),
