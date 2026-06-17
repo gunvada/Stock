@@ -36,6 +36,12 @@
     "entry_time_et": "06:30"
   },
 
+  "recommend": {
+    "require_verdicts": ["강한매수", "매수관심"],
+    "top_n": 15,
+    "ratio_weight": 1.0
+  },
+
   "timing_study": {
     "lookback_trading_days": 120,
     "universe_top_n": 20,

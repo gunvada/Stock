@@ -46,6 +46,8 @@ def rec_config(cfg):
     rc = cfg.setdefault("recommend", {})
     rc.setdefault("require_verdicts", ["강한매수", "매수관심"])
     rc.setdefault("top_n", 15)
+    # 종합 순번 = candle_score(마감강도+신호형태+추세위치 통합) + ratio_weight*log10(폭증배율)
+    rc.setdefault("ratio_weight", 1.0)
     return rc
 
 
@@ -70,16 +72,24 @@ def produce(cfg):
     if "candle_signal" not in df.columns:
         sys.exit("[오류] surge CSV에 candle_signal 컬럼이 없습니다(구버전). scanner.py 재실행 필요.")
 
+    import numpy as np
     rec = df[df["candle_signal"].isin(rc["require_verdicts"])].copy()
     rec = rec[~rec["ticker"].isin(TEST_TICKERS)]          # 테스트 심볼 제외
-    rec = rec.sort_values("ratio", ascending=False).head(rc["top_n"])
     if rec.empty:
         print(f"[알림] {sig_date} 신호 부합 추천종목 없음 (require_verdicts={rc['require_verdicts']}).")
         return
 
+    # 종합 순번: candle_score(마감강도+신호형태+추세위치) + 가중*log10(폭증배율)
+    if "candle_score" in rec.columns:
+        rec["rank_score"] = (rec["candle_score"]
+                             + rc["ratio_weight"] * np.log10(rec["ratio"].clip(lower=1))).round(2)
+        rec = rec.sort_values("rank_score", ascending=False).head(rc["top_n"])
+    else:  # 구버전 surge CSV 폴백
+        rec = rec.sort_values("ratio", ascending=False).head(rc["top_n"])
+
     rec["매수참고"] = rec["latest_close"].round(3)
-    cols = ["ticker", "ratio", "latest_close", "candle_signal", "candle_pos",
-            "close_pos", "intraday_chg_%", "매수참고"]
+    cols = ["ticker", "rank_score", "ratio", "latest_close", "candle_signal",
+            "candle_pos", "close_pos", "candle_score", "intraday_chg_%", "매수참고"]
     cols = [c for c in cols if c in rec.columns]
     out = rec[cols]
 
@@ -88,6 +98,7 @@ def produce(cfg):
 
     print("=" * 78)
     print(f"  오늘자 추천종목  (신호일 {sig_date} · 캔들신호 {rc['require_verdicts']} 부합 상위 {len(out)})")
+    print(f"  순번: 종합점수 = candle_score(마감강도+신호형태+추세위치) + {rc['ratio_weight']:.1f}×log10(폭증배율)")
     print(f"  모니터링: 다음 거래일 시초가 진입 기준, 손절/익절 라인 없이 시초→종가 실측 추적")
     print("=" * 78)
     print(out.to_string(index=False))
