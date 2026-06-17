@@ -59,6 +59,23 @@ def show_candle_verified(path):
     print("   " + d[cols].to_string(index=False).replace("\n", "\n   "))
 
 
+def show_manual(path):
+    if not os.path.exists(path):
+        print("   (저널 없음)")
+        return
+    d = pd.read_csv(path)
+    if d.empty:
+        print("   (비어있음)")
+        return
+    cols = [c for c in ["trade_date", "ticker", "entry", "exit", "ret_%", "note"] if c in d.columns]
+    print("   " + d[cols].tail(8).to_string(index=False).replace("\n", "\n   "))
+    scored = pd.to_numeric(d.get("ret_%"), errors="coerce").dropna() if "ret_%" in d.columns else None
+    if scored is not None and len(scored):
+        print(f"   채점분 {len(scored)}건 | 평균 {scored.mean():+.2f}% | 승률 {(scored>0).mean()*100:.0f}%")
+    else:
+        print("   (아직 채점 전 — 매매일 데이터 대기)")
+
+
 def show_window(path):
     if not os.path.exists(path):
         print("   (장부 없음 — window_sim.py 실행 필요)")
@@ -103,6 +120,8 @@ def regular():
     show_ledger(os.path.join(OUT, "verification_ledger.csv"))
     print(" ▶ 윈도우 시뮬 (KST 22:30매수→23:30매도 · Top5)")
     show_window(os.path.join(OUT, "window_sim_ledger.csv"))
+    print(" ▶ 실매매 저널 (raw, 룰없음)")
+    show_manual(os.path.join(OUT, "manual_trades.csv"))
 
 
 def premarket():
