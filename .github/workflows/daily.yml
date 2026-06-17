@@ -43,6 +43,9 @@ jobs:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: python pullback_scanner.py
 
+      - name: 캔들-베이스 교차검증 (후보 축소·신뢰성)
+        run: python candle_verify.py
+
       - name: 자동 검증 (전일 픽 채점)
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
