@@ -101,3 +101,28 @@ python verify.py
 | `dollar_volume_M` | 거래대금(백만 $) |
 | `intraday_chg_%` | 최신일 시가→종가 변동 |
 | `live_price` / `live_chg_%` | (Finnhub) 실시간 시세 |
+
+## 프리마켓 전용 파이프라인 (본장과 분리)
+프리마켓(장 시작 전) 갭상승+거래량 모멘텀만 따로 보는 별도 파이프라인이다.
+출력·장부·워크플로가 본장과 완전히 분리돼 있다.
+```powershell
+python premarket_scanner.py            # 프리마켓 추천 픽 → output/premarket_<날짜>.csv
+python premarket_verify.py             # 장 시작 전 창(ET 05:30–09:00) 매매 채점 → output/premarket_ledger.csv
+python premarket_performance.py        # ↑ 장부로 최근 60일 추천 성과 집계 (성과 관리 항목)
+```
+
+### 프리마켓 추천 종목 성과 관리 (premarket_performance.py)
+`premarket_verify.py` 가 누적해 둔 장부(`output/premarket_ledger.csv`)를 토대로,
+**최근 60일(기본) 동안 프리마켓 추천 종목이 실제로 어땠는지**를 한곳에서 관리·집계한다.
+과거 추천 회고용 성과 항목이며 매매 신호가 아니다.
+```powershell
+python premarket_performance.py        # 최근 60일 성과
+python premarket_performance.py 90     # 창을 90일로 조정
+```
+집계 항목:
+- **전체** — 거래수·승률·순익평균(기대값)·누적복리·MDD·손익비(Profit Factor)·익절/손절 도달률
+- **추천 종목별** — 종목별 추천(거래)횟수·승률·순익합/평균·최고/최저 → 어떤 추천이 통했나
+- **일자별** — 날짜별 종목수·순익평균·승률 (최근 우선)
+
+종목별 성과표는 `output/premarket_performance_<날짜>.csv` 로 저장된다.
+창 길이는 `config.json["premarket"]["performance_lookback_days"]`(기본 60) 또는 실행 인자로 조정.

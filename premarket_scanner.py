@@ -47,6 +47,7 @@ def pm_config(cfg):
     pm.setdefault("price_max", 20.0)
     pm.setdefault("tp_pct", 10.0)
     pm.setdefault("stop_pct", 8.0)
+    pm.setdefault("performance_lookback_days", 60)  # 성과 관리 집계 창(달력일)
     return pm
 
 
