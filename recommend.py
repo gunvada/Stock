@@ -29,7 +29,7 @@ import glob
 import pandas as pd
 
 import scanner
-from daily_verify import daily_one, next_trading_date, COST, TP, STOP
+from daily_verify import daily_one, next_trading_date, COST
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -43,8 +43,6 @@ def rec_config(cfg):
     rc = cfg.setdefault("recommend", {})
     rc.setdefault("require_verdicts", ["강한매수", "매수관심"])
     rc.setdefault("top_n", 15)
-    rc.setdefault("tp_pct", TP)
-    rc.setdefault("stop_pct", STOP)
     return rc
 
 
@@ -76,10 +74,8 @@ def produce(cfg):
         return
 
     rec["매수참고"] = rec["latest_close"].round(3)
-    rec["손절"] = (rec["latest_close"] * (1 - rc["stop_pct"] / 100)).round(3)
-    rec["익절목표"] = (rec["latest_close"] * (1 + rc["tp_pct"] / 100)).round(3)
     cols = ["ticker", "ratio", "latest_close", "candle_signal", "candle_pos",
-            "close_pos", "intraday_chg_%", "매수참고", "손절", "익절목표"]
+            "close_pos", "intraday_chg_%", "매수참고"]
     cols = [c for c in cols if c in rec.columns]
     out = rec[cols]
 
@@ -88,7 +84,7 @@ def produce(cfg):
 
     print("=" * 78)
     print(f"  오늘자 추천종목  (신호일 {sig_date} · 캔들신호 {rc['require_verdicts']} 부합 상위 {len(out)})")
-    print(f"  매매계획: 다음 거래일 시초가 매수참고, +{rc['tp_pct']:.0f}% 익절 / -{rc['stop_pct']:.0f}% 손절")
+    print(f"  모니터링: 다음 거래일 시초가 진입 기준, 손절/익절 라인 없이 시초→종가 실측 추적")
     print("=" * 78)
     print(out.to_string(index=False))
     print("-" * 78)
@@ -100,7 +96,8 @@ def produce(cfg):
 # --------------------------------------------------------------------------- #
 # 다음날 검증·누적
 # --------------------------------------------------------------------------- #
-def score(picks, trade_date, key, tp, stop):
+def score(picks, trade_date, key):
+    """손절/익절 라인 없이 모니터링: 시초→종가 실측 + 장중 최고/최저 추적."""
     rows = []
     for _, p in picks.iterrows():
         t = p["ticker"]
@@ -109,23 +106,19 @@ def score(picks, trade_date, key, tp, stop):
             continue
         o, h, l, c = b["o"], b["h"], b["l"], b["c"]
         oc = (c - o) / o * 100
-        hi, lo = (h - o) / o * 100, (l - o) / o * 100
-        hit_tp, hit_stop = hi >= tp, lo <= -stop
-        gross = -stop if hit_stop else (tp if hit_tp else oc)
+        hi, lo = (h - o) / o * 100, (l - o) / o * 100   # 장중 최고/최저 도달(모니터링)
         rows.append({"ticker": t,
                      "candle_signal": p.get("candle_signal"),
                      "candle_pos": p.get("candle_pos"),
                      "open": round(o, 4), "close": round(c, 4),
                      "oc_%": round(oc, 1), "hi_%": round(hi, 1), "lo_%": round(lo, 1),
-                     "tp_hit": int(hit_tp), "stop_hit": int(hit_stop),
-                     "net_%": round(gross - COST, 1)})
+                     "net_%": round(oc - COST, 1)})   # 순수 시초→종가(비용 차감)
     return rows
 
 
 def verify(cfg):
     rc = rec_config(cfg)
     key = cfg["polygon_api_key"]
-    tp, stop = rc["tp_pct"], rc["stop_pct"]
 
     old = pd.DataFrame()
     done = set()
@@ -145,15 +138,16 @@ def verify(cfg):
         if not trade_date:
             print(f"[대기] {sig} 추천 {len(picks)}개 — 매매일 데이터 아직 미공개.")
             continue
-        scored = score(picks, trade_date, key, tp, stop)
+        scored = score(picks, trade_date, key)
         if not scored:
             print(f"[대기] {sig} — {trade_date} 종목 데이터 없음.")
             continue
         for s in scored:
             new_rows.append({"signal_date": sig, "trade_date": trade_date, **s})
         d = pd.DataFrame(scored)
-        print(f"[채점] {sig}→{trade_date}: {len(d)}종목 | 순익평균 {d['net_%'].mean():+.1f}% | "
-              f"승 {(d['net_%']>0).sum()}/{len(d)} | 익절 {d['tp_hit'].sum()} | 손절 {d['stop_hit'].sum()}")
+        print(f"[모니터] {sig}→{trade_date}: {len(d)}종목 | 시초→종가평균 {d['net_%'].mean():+.1f}% | "
+              f"상승 {(d['net_%']>0).sum()}/{len(d)} | 장중최고평균 {d['hi_%'].mean():+.1f}% | "
+              f"장중최저평균 {d['lo_%'].mean():+.1f}%")
 
     if not new_rows:
         print("새로 채점할 추천 없음(모두 검증 완료이거나 데이터 대기 중).")
@@ -162,17 +156,17 @@ def verify(cfg):
     ledger.to_csv(LEDGER, index=False, encoding="utf-8-sig")
     n = len(ledger)
     print("\n" + "=" * 72)
-    print(f"  추천종목 누적 검증 성적 (총 {n}거래, 왕복비용 {COST}% 차감)")
+    print(f"  추천종목 누적 모니터링 (총 {n}거래, 시초→종가 / 왕복비용 {COST}% 차감)")
     print("=" * 72)
-    print(f"  순익 평균 : {ledger['net_%'].mean():+.2f}% / 거래")
-    print(f"  승률      : {(ledger['net_%']>0).mean()*100:.0f}%  ({(ledger['net_%']>0).sum()}/{n})")
-    print(f"  익절 도달 : {ledger['tp_hit'].mean()*100:.0f}%  | 손절 도달: {ledger['stop_hit'].mean()*100:.0f}%")
+    print(f"  시초→종가 평균 : {ledger['net_%'].mean():+.2f}% / 거래")
+    print(f"  상승 비율      : {(ledger['net_%']>0).mean()*100:.0f}%  ({(ledger['net_%']>0).sum()}/{n})")
+    print(f"  장중 최고 평균 : {ledger['hi_%'].mean():+.1f}%  | 장중 최저 평균: {ledger['lo_%'].mean():+.1f}%")
     # 캔들신호별 성과(쌓이면 어떤 신호가 통하는지)
     if "candle_signal" in ledger.columns and ledger["candle_signal"].notna().any():
         print("  [캔들신호별]")
         for sigv, g in ledger.groupby("candle_signal"):
-            print(f"    {sigv:6s} n={len(g):3d} | 순익평균 {g['net_%'].mean():+.1f}% | "
-                  f"승률 {(g['net_%']>0).mean()*100:.0f}%")
+            print(f"    {sigv:6s} n={len(g):3d} | 시초→종가평균 {g['net_%'].mean():+.1f}% | "
+                  f"상승 {(g['net_%']>0).mean()*100:.0f}% | 장중최고평균 {g['hi_%'].mean():+.1f}%")
     print(f"  장부: {LEDGER}")
 
 
