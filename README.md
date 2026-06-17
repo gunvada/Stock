@@ -124,6 +124,39 @@ $env:GITHUB_TOKEN = "ghp_..."   # 또는 config.json 의 "github_token"
 | `claim_threshold_pct` | "주장 수익률 N% 이상" 강조 기준 | 20 |
 | `search_sleep_seconds` | 검색 호출 간 대기(미인증 보호) | 7 |
 
+## 전략 재검증 (benchmark.py) — 벤치마킹 2단계
+1단계가 모은 레포들이 "수익률 20%+"라 **주장**하는 전략 유형을, **임의 코드를
+돌리는 대신 투명하게 재구현**해 과거 데이터로 정직하게 백테스트하고 **매수 후
+보유(buy & hold) 기준선**과 비교한다.
+```powershell
+python benchmark.py
+```
+정직한 회계의 3원칙:
+- **look-ahead 차단** — 신호는 t일 종가까지의 정보로만 결정 → t→t+1 수익에 적용
+- **거래비용 반영** — 포지션 변경 1회당 `cost_bps`(기본 5bps) 차감
+- **buy & hold 비교** — 이걸 못 이기면 그 전략은 (비용·세금 감안 시) 의미 없음
+
+재구현한 전략 유형: `buy_hold`(기준선), `sma_50_200`(골든크로스),
+`momentum_200`(시계열 모멘텀), `rsi_meanrev`(RSI 평균회귀), `donchian_20_10`(돌파 추세추종).
+종목별로 돌린 뒤 **중앙값**으로 집계(한 종목 운 배제). 결과는
+`output\benchmark_<날짜>.csv`(집계)와 `benchmark_detail_<날짜>.csv`(종목×전략)로 저장.
+
+> 예시(SPY/QQQ/AAPL/MSFT/NVDA, 10년, 5bps): buy_hold가 CAGR·Sharpe 모두 1위로,
+> 능동전략 어느 것도 buy_hold의 CAGR을 못 이김. 능동전략은 MDD(낙폭)는 줄였지만
+> 수익률을 함께 깎아먹는 전형적 트레이드오프를 보였다. → README의 '주장 20%+'는
+> 이런 정직한 회계에서 검증되기 전엔 믿을 수 없다는 방증.
+
+> ⚠️ 이 수치도 '이 바스켓·이 기간'의 과거 결과일 뿐 미래를 보장하지 않는다.
+> 목적은 주장 수익률을 정직한 회계로 다시 재보는 것이지 매매 신호가 아니다.
+
+### benchmark 설정 (config.json → "benchmark" 섹션, 선택)
+| 키 | 의미 | 기본 |
+|---|---|---|
+| `tickers` | 백테스트 종목 바스켓 | SPY/QQQ/AAPL/MSFT/NVDA |
+| `period` | yfinance 기간 문자열 | 10y |
+| `cost_bps` | 포지션 변경 1회당 비용(bps) | 5 |
+| `rf_annual` | 무위험수익률(연, Sharpe용) | 0 |
+
 ## 결과 컬럼
 | 컬럼 | 의미 |
 |---|---|
