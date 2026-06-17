@@ -51,6 +51,8 @@ def pm_config(cfg):
     # 캔들 신호 부합 종목만 추천 픽으로 (surge CSV의 candle_signal 기준).
     # 빈 리스트면 필터 미적용(전 후보). 컬럼 없으면 자동 통과.
     pm.setdefault("require_verdicts", ["강한매수", "매수관심"])
+    # 타이밍 스터디(20거래일, 06:30 ET 진입이 +3.0%/거래로 최적)로 확정한 권장 진입 시각.
+    pm.setdefault("entry_time_et", "06:30")   # KST 19:30
     return pm
 
 
@@ -169,6 +171,7 @@ def main():
     print(f"  프리마켓 갭상승+거래량 모멘텀  —  {target} (창 KST 18:30–22:00 / ET 05:30–09:00)")
     print(f"  필터: 갭 ≥{pm['gap_min_pct']:.0f}% · 프리마켓활동 ≥{pm['min_pm_bars']}분봉 · "
           f"${pm['price_min']}~{pm['price_max']}")
+    print(f"  ★ 권장 진입: {pm['entry_time_et']} ET (KST 19:30) — 타이밍 스터디 확정 최적 타점")
     print("=" * 80)
     if out.empty:
         print("  조건 충족 종목 없음. (해당일 프리마켓 갭상승 모멘텀 없음 — 정상)")

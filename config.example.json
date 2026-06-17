@@ -32,7 +32,8 @@
     "tp_pct": 10.0,
     "stop_pct": 8.0,
     "performance_lookback_days": 60,
-    "require_verdicts": ["강한매수", "매수관심"]
+    "require_verdicts": ["강한매수", "매수관심"],
+    "entry_time_et": "06:30"
   },
 
   "timing_study": {
@@ -43,7 +44,7 @@
     "tp_pct": 10.0,
     "stop_pct": 8.0,
     "cost_pct": 2.5,
-    "gap_min_pct": 5.0,
+    "gap_min_pct": 3.0,
     "require_verdicts": ["강한매수", "매수관심"],
     "buckets": ["05:30", "06:00", "06:30", "07:00", "07:30", "08:00", "08:30", "09:00"]
   }
