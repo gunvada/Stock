@@ -51,6 +51,9 @@ jobs:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: python daily_verify.py
 
+      - name: 윈도우 시뮬 (KST 22:30매수→23:30매도, Top5)
+        run: python window_sim.py
+
       - name: 결과 커밋 & 푸시
         run: |
           git config user.name "github-actions[bot]"

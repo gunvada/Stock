@@ -59,6 +59,22 @@ def show_candle_verified(path):
     print("   " + d[cols].to_string(index=False).replace("\n", "\n   "))
 
 
+def show_window(path):
+    if not os.path.exists(path):
+        print("   (장부 없음 — window_sim.py 실행 필요)")
+        return
+    d = pd.read_csv(path)
+    if d.empty or "ret_%" not in d.columns:
+        print("   (비어있음)")
+        return
+    r, n = d["ret_%"], len(d)
+    print(f"   누적 {n}거래 | gross 평균 {r.mean():+.2f}% | 승률 {(r>0).mean()*100:.0f}%"
+          + (f" | net평균 {d['net_%'].mean():+.2f}%" if "net_%" in d.columns else ""))
+    cols = [c for c in ["trade_date", "ticker", "entry_0930", "exit_1030", "ret_%"] if c in d.columns]
+    print("   최근 5거래:")
+    print("   " + d[cols].tail(5).to_string(index=False).replace("\n", "\n   "))
+
+
 def show_ledger(path):
     if not os.path.exists(path):
         print("   (장부 없음 — 아직 채점된 거래 없음)")
@@ -83,8 +99,10 @@ def regular():
     show_picks(latest_dated("pullback"), "(본장 최신 픽 파일 없음 — daily.yml 실행 필요)")
     print(" ▶ 캔들-베이스 교차검증 통과 (후보 축소)")
     show_candle_verified(latest_dated("candle_verified"))
-    print(" ▶ 누적 성적 (verification_ledger)")
+    print(" ▶ 누적 성적 (verification_ledger · 종가청산)")
     show_ledger(os.path.join(OUT, "verification_ledger.csv"))
+    print(" ▶ 윈도우 시뮬 (KST 22:30매수→23:30매도 · Top5)")
+    show_window(os.path.join(OUT, "window_sim_ledger.csv"))
 
 
 def premarket():
