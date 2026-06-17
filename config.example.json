@@ -25,7 +25,7 @@
   },
 
   "premarket": {
-    "universe_top_n": 40,
+    "universe_top_n": 6,
     "gap_min_pct": 5.0,
     "min_pm_bars": 30,
     "price_min": 0.50,
@@ -39,13 +39,13 @@
 
   "recommend": {
     "require_verdicts": ["강한매수", "매수관심"],
-    "top_n": 15,
+    "top_n": 6,
     "ratio_weight": 1.0
   },
 
   "timing_study": {
     "lookback_trading_days": 120,
-    "universe_top_n": 20,
+    "universe_top_n": 6,
     "exit_mode": "open",
     "signal_bar_minutes": 30,
     "tp_pct": 10.0,

@@ -38,7 +38,7 @@ PM_START, PM_END = "05:30", "09:00"
 def pm_config(cfg):
     """config.json['premarket'] 기본값 채우기 (섹션 없어도 동작)."""
     pm = cfg.setdefault("premarket", {})
-    pm.setdefault("universe_top_n", 40)      # 본장 후보 중 상위 N개만 평가
+    pm.setdefault("universe_top_n", 6)       # 본장 후보 중 상위 N개만 평가(엣지가 상위에 집중)
     pm.setdefault("gap_min_pct", 5.0)        # 전일종가 대비 최소 갭상승 %
     # 야후는 프리마켓 '거래량'을 제공하지 않으므로(1분봉 Volume=0),
     # 프리마켓 1분봉 '개수'를 활동량(유동성) 프록시로 사용한다. 정밀 거래량은 유료 필요.

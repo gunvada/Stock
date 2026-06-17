@@ -45,7 +45,7 @@ TEST_TICKERS = {"ZVZZT", "ZWZZT", "ZXYZ.A", "ZBZX", "ZJZZT", "ZTST", "ZXZZT", "Z
 def rec_config(cfg):
     rc = cfg.setdefault("recommend", {})
     rc.setdefault("require_verdicts", ["강한매수", "매수관심"])
-    rc.setdefault("top_n", 15)
+    rc.setdefault("top_n", 6)
     # 종합 순번 = candle_score(마감강도+신호형태+추세위치 통합) + ratio_weight*log10(폭증배율)
     rc.setdefault("ratio_weight", 1.0)
     return rc

@@ -62,7 +62,7 @@ OPEN_ET = "09:30"
 def ts_config(cfg):
     ts = cfg.setdefault("timing_study", {})
     ts.setdefault("lookback_trading_days", 120)
-    ts.setdefault("universe_top_n", 20)        # 신호일별 폭증 상위 N만 평가
+    ts.setdefault("universe_top_n", 6)         # 신호일별 폭증 상위 N만 평가(엣지가 상위에 집중)
     ts.setdefault("exit_mode", "open")         # "open"=09:30 개장가 청산 / "tp_sl"
     ts.setdefault("signal_bar_minutes", 30)    # 분봉 캔들 신호 기준(10/20/30)
     ts.setdefault("tp_pct", 10.0)              # exit_mode="tp_sl" 일 때만 사용
