@@ -48,11 +48,15 @@ def pm_config(cfg):
     pm.setdefault("tp_pct", 10.0)
     pm.setdefault("stop_pct", 8.0)
     pm.setdefault("performance_lookback_days", 60)  # 성과 관리 집계 창(달력일)
+    # 캔들 신호 부합 종목만 추천 픽으로 (surge CSV의 candle_signal 기준).
+    # 빈 리스트면 필터 미적용(전 후보). 컬럼 없으면 자동 통과.
+    pm.setdefault("require_verdicts", ["강한매수", "매수관심"])
     return pm
 
 
-def load_universe(top_n):
-    """가장 최근 본장 산출물에서 (ticker, prior_close, signal_date) 유니버스 구성."""
+def load_universe(top_n, require_verdicts=None):
+    """가장 최근 본장 산출물에서 (ticker, prior_close, signal_date) 유니버스 구성.
+    require_verdicts 가 주어지고 surge CSV에 candle_signal 컬럼이 있으면 신호 부합 종목만."""
     files = sorted(glob.glob(os.path.join(scanner.OUTPUT_DIR, "surge_*.csv")) +
                    glob.glob(os.path.join(scanner.OUTPUT_DIR, "pullback_*.csv")))
     # 날짜형 파일만 (pullback_backtest_*.csv 등 제외)
@@ -69,8 +73,18 @@ def load_universe(top_n):
     rank_col = "ratio" if "ratio" in df.columns else ("vol_ratio" if "vol_ratio" in df.columns else None)
     if rank_col:
         df = df.sort_values(rank_col, ascending=False)
+
+    # 캔들 신호 필터 (컬럼 존재 시에만)
+    note = ""
+    if require_verdicts and "candle_signal" in df.columns:
+        before = len(df)
+        df = df[df["candle_signal"].isin(require_verdicts)]
+        note = f" · 캔들신호 {require_verdicts} 부합 {len(df)}/{before}"
+    elif require_verdicts:
+        note = " · (candle_signal 컬럼 없음 → 신호필터 미적용)"
+
     uni = df[["ticker", close_col]].head(top_n).rename(columns={close_col: "prior_close"})
-    print(f"[1/3] 유니버스: {os.path.basename(src)} 상위 {len(uni)}개 (신호일 {sig_date})")
+    print(f"[1/3] 유니버스: {os.path.basename(src)} 상위 {len(uni)}개 (신호일 {sig_date}){note}")
     return uni, sig_date, src
 
 
@@ -104,7 +118,7 @@ def main():
     pm = pm_config(cfg)
     arg_date = sys.argv[1] if len(sys.argv) > 1 else None
 
-    uni, sig_date, _ = load_universe(pm["universe_top_n"])
+    uni, sig_date, _ = load_universe(pm["universe_top_n"], pm.get("require_verdicts"))
     # 평가 대상일: 인자 우선, 없으면 '신호일 다음 거래일'(주말 건너뜀)
     if arg_date:
         target = arg_date
