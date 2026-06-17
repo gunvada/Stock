@@ -17,6 +17,7 @@
 """
 import os
 import sys
+import datetime as dt
 
 import pandas as pd
 import requests
@@ -34,7 +35,8 @@ TP, STOP = 10.0, 8.0  # 익절/손절 %
 
 def main():
     cfg = scanner.load_config()
-    df = build_panel(cfg, requests.Session()).sort_values(["ticker", "date"])
+    session = requests.Session()
+    df = build_panel(cfg, session).sort_values(["ticker", "date"])
     g = df.groupby("ticker")
     df["c_m2"] = g["c"].shift(2)
     df["base_vol"] = g["v"].transform(lambda s: s.shift(1).rolling(7, min_periods=3).median())
@@ -53,6 +55,23 @@ def main():
                & (day["c"].between(0.3, 20))
                & (day["dol_M"] >= 2)
                & (day["run2d_%"] < 100)].copy()
+
+    # 리버스 스플릿 필터: 역분할은 '가짜 급등/가짜 거래량배율'을 만들어 후보를 오염시킴.
+    sc = cfg["scan"]
+    if sc.get("exclude_recent_splits", True) and not cand.empty:
+        look = int(sc.get("split_lookback_days", 30))
+        mode = sc.get("split_filter_mode", "reverse")  # 'reverse' | 'all'
+        d0 = dt.date.fromisoformat(latest)
+        splits = scanner.fetch_recent_splits(
+            cfg["polygon_api_key"], session,
+            (d0 - dt.timedelta(days=look)).isoformat(),
+            (d0 + dt.timedelta(days=5)).isoformat())
+        bad = scanner.split_exclusion_set(splits, mode) & set(cand["ticker"])
+        if bad:
+            tag = ", ".join(f"{t}({splits[t]['type']} {splits[t]['from']}:{splits[t]['to']} {splits[t]['date']})"
+                            for t in sorted(bad))
+            print(f"  [분할필터] 최근 분할 종목 {len(bad)}개 제외 → {tag}")
+            cand = cand[~cand["ticker"].isin(bad)]
 
     # 매매 플랜
     cand["매수참고"] = cand["c"].round(3)          # 다음날 시초/VWAP회복 부근

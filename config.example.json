@@ -15,6 +15,10 @@
     "min_latest_dollar_volume": 1000000,
 
     "baseline_method": "median",
-    "top_n": 40
+    "top_n": 40,
+
+    "exclude_recent_splits": true,
+    "split_lookback_days": 30,
+    "split_filter_mode": "reverse"
   }
 }
