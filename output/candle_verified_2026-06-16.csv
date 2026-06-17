@@ -1,8 +1,8 @@
-﻿ticker,pass,n_signals,recent_signals,last_candle
-SNWV,True,2,"작은몸통양꼬리양봉@D-3, 작은몸통양꼬리양봉@D-2",-
-BEEM,True,1,작은몸통양꼬리양봉@D-3,-
-AHMA,True,1,위꼬리양봉@D-4,-
-NIVF,False,0,-,-
-WNW,False,0,-,도지
-BTTC,False,0,-,-
-CAMP,False,0,-,-
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+SNWV,True,2,하락,"작은몸통양꼬리양봉@D-3, 작은몸통양꼬리양봉@D-2",-
+BEEM,True,1,하락,작은몸통양꼬리양봉@D-3,-
+AHMA,True,1,하락,위꼬리양봉@D-4,-
+NIVF,False,0,하락,-,-
+WNW,False,0,하락,-,도지
+BTTC,False,0,하락,-,-
+CAMP,False,0,하락,-,-

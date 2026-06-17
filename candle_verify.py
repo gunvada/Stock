@@ -2,13 +2,17 @@
 """
 캔들 교차검증 레이어  (본장 후보 → '캔들 시그널·모양'으로 재검증·축소)
 ====================================================================
-거래량 폭증 눌림목 후보(pullback_<date>.csv)를, 위치/베이스 지표는 보지 않고
-**오로지 캔들 시그널과 모양**으로 교차검증한다 — 최근 N거래일 일봉 중
-상승 성질 캔들(양봉스프링·위꼬리양봉·양봉팽이/긴위아래꼬리 작은양봉 등)이
-출현했는지 본다. 데이터는 yfinance 최근 일봉(API 키 불필요).
+거래량 폭증 눌림목 후보(pullback_<date>.csv)를 **캔들 시그널·모양 + 추세**로
+교차검증한다. 데이터는 yfinance 일봉(API 키 불필요).
+  · 캔들: 최근 LOOKBACK일 일봉에 상승 성질 캔들(양봉스프링·위꼬리양봉·양봉팽이
+          /긴위아래꼬리 작은양봉 등) 출현 여부 (candle_patterns).
+  · 추세: 장기 이평 방향+가격 위치로 '구간별 위치' 근사(상승/하락/횡보).
 
-PASS = 최근 LOOKBACK일 안에 상승 캔들 신호/모양이 하나라도 출현.
-(저점대비 배수·베이스비율·깊은하락 등 위치 지표는 사용하지 않음 — 사용자 정의)
+PASS = 최근 상승 캔들 신호 있음 (캔들 시그널·모양 기준).
+  · 추세(상승/하락/횡보)는 **참고 표시용 컬럼**이며 PASS를 강제하지 않는다(사용자 정의).
+    이유: 캔들이론은 '하락세 최저점 반등'도 노리는데, 단순 이평 추세로 하락세를 일괄
+    제외하면 그 바닥 반등까지 걸러지기 때문(최저점 vs 중도 구분은 멀티TF 재량 판단).
+주의: 저점대비배수·베이스비율 등 위치 지표는 미사용(사용자 정의).
 
 사용법:
   python candle_verify.py                 # 최신 pullback_<date>.csv 교차검증
@@ -29,7 +33,26 @@ except Exception:
     pass
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
-LOOKBACK = 5   # 최근 며칠 봉에서 '모양'을 찾을지 (튜닝 가능)
+LOOKBACK = 5         # 최근 며칠 봉에서 '모양'을 찾을지 (튜닝 가능)
+
+# 추세(구간별 위치) 근사용 — 장기 이평 방향 + 가격 위치
+TREND_MA = 100          # 장기 이평 일수
+TREND_SLOPE_BARS = 20   # 기울기 측정 구간
+TREND_FLAT_PCT = 2.0    # 이평 변화 |%| < 이 값이면 '횡보'
+# 참고: 추세는 표시용. (상승/횡보가 '유리'한 맥락이나 PASS를 강제하지 않음)
+
+
+def classify_trend(price, ma_now, ma_prev):
+    """장기 이평 기울기 + 가격 위치로 구간 근사. 순수 함수.
+    상승: 이평 상승 & 가격≥이평 / 하락: 이평 하락 & 가격≤이평 / 그 외 횡보. 데이터부족=불명."""
+    if not ma_now or not ma_prev or ma_now <= 0 or ma_prev <= 0:
+        return "불명"
+    slope = (ma_now - ma_prev) / ma_prev * 100
+    if slope > TREND_FLAT_PCT and price >= ma_now:
+        return "상승"
+    if slope < -TREND_FLAT_PCT and price <= ma_now:
+        return "하락"
+    return "횡보"
 
 
 def recent_bullish_signals(ohlc, lookback=LOOKBACK):
@@ -51,26 +74,40 @@ def _fmt_signals(sigs):
     return ", ".join(f"{'+'.join(s['labels'])}@D-{s['offset']}" for s in sigs)
 
 
+def _trend_of(closes):
+    """종가 리스트 → (추세라벨). 장기 이평(TREND_MA)과 그 기울기로 근사."""
+    n = len(closes)
+    if n < TREND_MA + TREND_SLOPE_BARS:
+        return "불명"
+    ma_now = sum(closes[-TREND_MA:]) / TREND_MA
+    prev = closes[-(TREND_MA + TREND_SLOPE_BARS):-TREND_SLOPE_BARS]
+    ma_prev = sum(prev) / len(prev)
+    return classify_trend(closes[-1], ma_now, ma_prev)
+
+
 def evaluate_ticker(ticker):
-    """yfinance 최근 일봉으로 '캔들 시그널·모양'만 평가."""
+    """yfinance 일봉으로 '캔들 시그널·모양' + '추세(구간별 위치 근사)' 평가.
+    PASS = 최근 캔들 신호 있음 AND 추세가 상승/횡보(하락세 신호는 제외)."""
     import yfinance as yf
     try:
-        df = yf.Ticker(ticker).history(period="3mo", interval="1d", auto_adjust=False)
+        df = yf.Ticker(ticker).history(period="1y", interval="1d", auto_adjust=False)
     except Exception as e:
         return {"ticker": ticker, "error": f"{type(e).__name__}: {str(e)[:60]}"}
     if df is None or df.empty:
         return {"ticker": ticker, "error": "데이터 없음"}
     df = df.dropna(subset=["Open", "High", "Low", "Close"])
-    ohlc = list(zip(df["Open"], df["High"], df["Low"], df["Close"]))
-    ohlc = [tuple(float(x) for x in row) for row in ohlc]
+    ohlc = [tuple(float(x) for x in row)
+            for row in zip(df["Open"], df["High"], df["Low"], df["Close"])]
     if not ohlc:
         return {"ticker": ticker, "error": "유효 일봉 없음"}
     sigs = recent_bullish_signals(ohlc)
+    trend = _trend_of([float(c) for c in df["Close"]])
     last = ohlc[-1]
     return {
         "ticker": ticker,
-        "pass": bool(sigs),
+        "pass": bool(sigs),          # 통과는 캔들 신호 기준 (trend는 표시용)
         "n_signals": len(sigs),
+        "trend": trend,
         "recent_signals": _fmt_signals(sigs),
         "last_candle": ",".join(cp.detect(*last)) or "-",
     }
@@ -102,18 +139,19 @@ def main():
     if date != "adhoc":
         res.to_csv(os.path.join(OUT, f"candle_verified_{date}.csv"), index=False, encoding="utf-8-sig")
 
-    print("\n" + "=" * 80)
-    print(f"  캔들 시그널·모양 교차검증 (최근 {LOOKBACK}일 내 상승 캔들 출현 = PASS)")
-    print("=" * 80)
+    print("\n" + "=" * 84)
+    print(f"  캔들 시그널·모양 교차검증 (PASS=최근 {LOOKBACK}일 상승캔들)  +  추세 표시")
+    print("=" * 84)
     if not res.empty:
-        print(res[["ticker", "pass", "n_signals", "recent_signals", "last_candle"]].to_string(index=False))
+        print(res[["ticker", "pass", "trend", "n_signals", "recent_signals", "last_candle"]].to_string(index=False))
         passed = res[res["pass"] == True]["ticker"].tolist()
-        print("-" * 80)
-        print(f"  통과(캔들신호 있음): {len(passed)}/{len(ok)}  →  {', '.join(passed) if passed else '없음'}")
+        print("-" * 84)
+        print(f"  통과(캔들신호): {len(passed)}/{len(ok)}  →  {', '.join(passed) if passed else '없음'}")
     if err:
         print("  조회실패: " + ", ".join(f"{e['ticker']}({e['error']})" for e in err))
-    print("=" * 80)
-    print("  ※ 위치/베이스 지표는 보지 않음. 오로지 상승 캔들 시그널·모양 기준.")
+    print("=" * 84)
+    print("  ※ trend(상승/하락/횡보)는 참고용 — PASS를 강제하지 않음. 캔들이론상 하락세 '바닥'")
+    print("    반등도 유효하므로 추세는 회원이 직접 판단(원전도 멀티TF 재량). 상승/횡보가 유리.")
 
 
 if __name__ == "__main__":
