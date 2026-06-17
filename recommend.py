@@ -88,8 +88,9 @@ def produce(cfg):
         rec = rec.sort_values("ratio", ascending=False).head(rc["top_n"])
 
     rec["매수참고"] = rec["latest_close"].round(3)
-    cols = ["ticker", "rank_score", "ratio", "latest_close", "candle_signal",
-            "candle_pos", "close_pos", "candle_score", "intraday_chg_%", "매수참고"]
+    cols = ["ticker", "rank_score", "ratio", "dollar_surge_x", "avg_dollar_vol_10d_M",
+            "dollar_volume_M", "latest_close", "candle_signal", "candle_pos",
+            "close_pos", "candle_score", "intraday_chg_%", "매수참고"]
     cols = [c for c in cols if c in rec.columns]
     out = rec[cols]
 

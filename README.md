@@ -98,7 +98,9 @@ python verify.py
 | `ratio` | 폭증 배율 (최신일 ÷ 평소 중앙값) |
 | `latest_close` | 최신일 종가 |
 | `latest_volume` / `baseline_volume` | 최신일 / 평소 거래량 |
-| `dollar_volume_M` | 거래대금(백만 $) |
+| `dollar_volume_M` | 최신일 거래대금(백만 $) |
+| `avg_dollar_vol_10d_M` | 평균 거래대금 10일치(백만 $) |
+| `dollar_surge_x` | 거래대금 폭증 배율 (최신일 ÷ 10일 평균) |
 | `intraday_chg_%` | 최신일 시가→종가 변동 |
 | `candle_signal` | 캔들 신호 종합 판정 (강한매수/매수관심/중립/매도주의/강한매도) |
 | `candle_pos` | 하이로우 기준선상 위치 (전고점돌파/전저점부근/완만한상승/수횡파/잔구간 등) |
