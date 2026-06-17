@@ -85,7 +85,10 @@ def load_universe(top_n, require_verdicts=None):
     elif require_verdicts:
         note = " · (candle_signal 컬럼 없음 → 신호필터 미적용)"
 
-    uni = df[["ticker", close_col]].head(top_n).rename(columns={close_col: "prior_close"})
+    keep_cols = ["ticker", close_col]
+    if "candle_signal" in df.columns:
+        keep_cols.append("candle_signal")
+    uni = df[keep_cols].head(top_n).rename(columns={close_col: "prior_close"})
     print(f"[1/3] 유니버스: {os.path.basename(src)} 상위 {len(uni)}개 (신호일 {sig_date}){note}")
     return uni, sig_date, src
 
@@ -136,6 +139,7 @@ def main():
 
     rows = []
     pc_map = dict(zip(uni["ticker"], uni["prior_close"]))
+    cs_map = dict(zip(uni["ticker"], uni["candle_signal"])) if "candle_signal" in uni.columns else {}
     for t, f in frames.items():
         prior_close = float(pc_map.get(t, 0) or 0)
         if prior_close <= 0:
@@ -153,6 +157,7 @@ def main():
             continue
         rows.append({
             "ticker": t,
+            "candle_signal": cs_map.get(t, ""),
             "prior_close": round(prior_close, 3),
             "pm_price": round(pm_last, 3),
             "gap_%": round(gap, 1),

@@ -88,7 +88,8 @@ def produce(cfg):
         rec = rec.sort_values("ratio", ascending=False).head(rc["top_n"])
 
     rec["매수참고"] = rec["latest_close"].round(3)
-    cols = ["ticker", "rank_score", "ratio", "dollar_surge_x", "avg_dollar_vol_10d_M",
+    rec["signal_date"] = sig_date
+    cols = ["signal_date", "ticker", "rank_score", "ratio", "dollar_surge_x", "avg_dollar_vol_10d_M",
             "dollar_volume_M", "latest_close", "candle_signal", "candle_pos",
             "close_pos", "candle_score", "intraday_chg_%", "매수참고"]
     cols = [c for c in cols if c in rec.columns]
@@ -98,7 +99,8 @@ def produce(cfg):
     out.to_csv(path, index=False, encoding="utf-8-sig")
 
     print("=" * 78)
-    print(f"  오늘자 추천종목  (신호일 {sig_date} · 캔들신호 {rc['require_verdicts']} 부합 상위 {len(out)})")
+    print(f"  오늘자 추천종목  ★ 추천날짜: {sig_date}")
+    print(f"  캔들신호 {rc['require_verdicts']} 부합 상위 {len(out)}종목")
     print(f"  순번: 종합점수 = candle_score(마감강도+신호형태+추세위치) + {rc['ratio_weight']:.1f}×log10(폭증배율)")
     print(f"  모니터링: 다음 거래일 시초가 진입 기준, 손절/익절 라인 없이 시초→종가 실측 추적")
     print("=" * 78)
