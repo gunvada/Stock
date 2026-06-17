@@ -92,6 +92,38 @@ python verify.py
 | `vol_tolerance_pct` | Polygon↔Yahoo 거래량 허용 편차(%) | 25 |
 | `use_stooq` | Stooq 3차 대조 사용 | true |
 
+## GitHub 전략 수집 (collect_strategies.py) — 벤치마킹 1단계
+GitHub에서 '주식/알고리즘 트레이딩 전략' 레포를 긁어와, 각 README가 **주장하는**
+수익률·CAGR·Sharpe·승률을 한 표로 정리한다. "수익률 20% 넘는 코드 벤치마킹"의
+**1단계(후보 수집)**.
+```powershell
+python collect_strategies.py
+```
+- **GitHub Search API**로 키워드(config `collect.queries`) × star 정렬 상위 레포 수집.
+- 각 README에서 `수익률/return/CAGR/Sharpe/win rate/승률` 숫자를 정규식으로 추출.
+- 결과는 `output\strategies_<날짜>.csv` 저장. `claimed_return_%` 내림차순 정렬.
+
+> ⚠️ **`claimed_return_%`·`sharpe`·`win_rate_%` 는 README의 '주장값'일 뿐**입니다.
+> 거의 다 비검증 백테스트 수치라 과최적화·미래참조(look-ahead)·생존편향·수수료
+> 누락이 섞여 있을 수 있어 **그대로 믿으면 안 됩니다.** 진짜 벤치마킹(2단계)은
+> `has_backtest=True` 인 전략의 로직을 가져와 본인 데이터(Polygon/yfinance)로
+> `backtest.py` 계열로 **직접 재검증**해야 합니다.
+
+토큰을 넣으면 검색 한도가 크게 올라갑니다(미인증 10회/분 → 인증 30회/분, README
+조회 60/시간 → 5000/시간). 없어도 동작은 하지만 느립니다:
+```powershell
+$env:GITHUB_TOKEN = "ghp_..."   # 또는 config.json 의 "github_token"
+```
+
+### collect 설정 (config.json → "collect" 섹션, 선택)
+| 키 | 의미 | 기본 |
+|---|---|---|
+| `queries` | 검색 키워드 목록 | (트레이딩 전략 4종) |
+| `per_query` | 쿼리당 상위 레포 수 | 30 |
+| `min_stars` | 최소 star | 20 |
+| `claim_threshold_pct` | "주장 수익률 N% 이상" 강조 기준 | 20 |
+| `search_sleep_seconds` | 검색 호출 간 대기(미인증 보호) | 7 |
+
 ## 결과 컬럼
 | 컬럼 | 의미 |
 |---|---|

@@ -20,5 +20,19 @@
     "exclude_recent_splits": true,
     "split_lookback_days": 30,
     "split_filter_mode": "reverse"
+  },
+
+  "collect": {
+    "queries": [
+      "algorithmic trading strategy backtest",
+      "quant trading python returns",
+      "stock trading bot backtest",
+      "trading strategy sharpe ratio"
+    ],
+    "per_query": 30,
+    "min_stars": 20,
+    "claim_threshold_pct": 20.0,
+    "max_readme_bytes": 200000,
+    "search_sleep_seconds": 7
   }
 }
