@@ -48,6 +48,25 @@ def test_multiple_signals():
     assert offsets == [0, 2]
 
 
+def test_classify_trend_up():
+    # 이평 상승(100→110) & 가격≥이평
+    assert cv.classify_trend(price=112, ma_now=110, ma_prev=100) == "상승"
+
+
+def test_classify_trend_down():
+    # 이평 하락(110→100) & 가격≤이평
+    assert cv.classify_trend(price=98, ma_now=100, ma_prev=110) == "하락"
+
+
+def test_classify_trend_flat():
+    # 이평 거의 변화 없음 → 횡보
+    assert cv.classify_trend(price=100, ma_now=100.5, ma_prev=100) == "횡보"
+
+
+def test_classify_trend_unknown():
+    assert cv.classify_trend(price=10, ma_now=None, ma_prev=None) == "불명"
+
+
 def _run():
     fns = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     for fn in fns:

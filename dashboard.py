@@ -55,7 +55,7 @@ def show_candle_verified(path):
     passed = d[d["pass"] == True]
     print(f"   ({date}) {len(d)}종목 중 통과 {len(passed)}종목"
           + (f": {', '.join(passed['ticker'])}" if len(passed) else " (없음)"))
-    cols = [c for c in ["ticker", "pass", "n_signals", "recent_signals", "last_candle"] if c in d.columns]
+    cols = [c for c in ["ticker", "pass", "trend", "n_signals", "recent_signals", "last_candle"] if c in d.columns]
     print("   " + d[cols].to_string(index=False).replace("\n", "\n   "))
 
 
