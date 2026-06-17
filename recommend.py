@@ -38,6 +38,9 @@ except Exception:
 
 LEDGER = os.path.join(scanner.OUTPUT_DIR, "recommend_ledger.csv")
 
+# Polygon 테스트용 심볼(실거래 종목 아님) — 결과에서 제외
+TEST_TICKERS = {"ZVZZT", "ZWZZT", "ZXYZ.A", "ZBZX", "ZJZZT", "ZTST", "ZXZZT", "ZVV"}
+
 
 def rec_config(cfg):
     rc = cfg.setdefault("recommend", {})
@@ -68,6 +71,7 @@ def produce(cfg):
         sys.exit("[오류] surge CSV에 candle_signal 컬럼이 없습니다(구버전). scanner.py 재실행 필요.")
 
     rec = df[df["candle_signal"].isin(rc["require_verdicts"])].copy()
+    rec = rec[~rec["ticker"].isin(TEST_TICKERS)]          # 테스트 심볼 제외
     rec = rec.sort_values("ratio", ascending=False).head(rc["top_n"])
     if rec.empty:
         print(f"[알림] {sig_date} 신호 부합 추천종목 없음 (require_verdicts={rc['require_verdicts']}).")
