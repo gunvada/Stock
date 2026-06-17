@@ -54,6 +54,9 @@ jobs:
       - name: 윈도우 시뮬 (KST 22:30매수→23:30매도, Top5)
         run: python window_sim.py
 
+      - name: 실매매 저널 채점 (raw, 룰없음)
+        run: python record_trade.py score
+
       - name: 결과 커밋 & 푸시
         run: |
           git config user.name "github-actions[bot]"
