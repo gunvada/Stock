@@ -149,9 +149,16 @@ def build_dataframe(collected):
 
 
 def compute_surge(df, cfg):
+    import candle_signals  # 일봉 캔들 신호 필터 (파동연상/캔들개론 기반)
+
     sc = cfg["scan"]
     method = sc.get("baseline_method", "median")
     latest_date = df["date"].max()
+
+    # 캔들 신호 필터 설정 (없어도 동작 — 기본은 주석만, 필터 미적용)
+    cf = sc.get("candle_filter", {})
+    cf_lookback = cf.get("lookback", sc.get("lookback_trading_days", 7))
+    cf_require = cf.get("require_verdicts", [])  # 예: ["강한매수","매수관심"] 면 그 외 제외
 
     out = []
     for ticker, g in df.groupby("ticker"):
@@ -189,6 +196,11 @@ def compute_surge(df, cfg):
         if latest["open"]:
             day_change = (latest_close - latest["open"]) / latest["open"] * 100
 
+        # 캔들 신호 평가 (최신봉 형태 + 하이로우 기준선상 위치)
+        sig = candle_signals.evaluate(g, lookback=cf_lookback)
+        if cf_require and sig["verdict"] not in cf_require:
+            continue  # 요구 판정에 미달 → 후보에서 제외
+
         out.append(
             {
                 "ticker": ticker,
@@ -198,6 +210,11 @@ def compute_surge(df, cfg):
                 "baseline_volume": int(baseline),
                 "dollar_volume_M": round(dollar_vol / 1e6, 2),
                 "intraday_chg_%": round(day_change, 1),
+                "candle_signal": sig["verdict"],
+                "candle_shape": sig["shape"],
+                "candle_pos": sig["position"],
+                "close_pos": sig["close_pos"],
+                "candle_score": sig["score"],
                 "latest_date": latest_date,
             }
         )
@@ -268,7 +285,8 @@ def main():
     print("-" * 70)
 
     show_cols = ["ticker", "ratio", "latest_close", "latest_volume",
-                 "baseline_volume", "dollar_volume_M", "intraday_chg_%"]
+                 "baseline_volume", "dollar_volume_M", "intraday_chg_%",
+                 "candle_signal", "candle_pos", "close_pos"]
     if "live_price" in res_top.columns:
         show_cols += ["live_price", "live_chg_%"]
 
