@@ -43,6 +43,22 @@ def show_picks(path, none_msg):
         print("   " + d[cols].to_string(index=False).replace("\n", "\n   "))
 
 
+def show_candle_verified(path):
+    if not path:
+        print("   (교차검증 파일 없음 — candle_verify.py 실행 필요)")
+        return
+    d = pd.read_csv(path)
+    date = DATED.search(os.path.basename(path)).group(1)
+    if d.empty or "pass" not in d.columns:
+        print(f"   ({date}) 결과 없음")
+        return
+    passed = d[d["pass"] == True]
+    print(f"   ({date}) {len(d)}종목 중 통과 {len(passed)}종목"
+          + (f": {', '.join(passed['ticker'])}" if len(passed) else " (없음)"))
+    cols = [c for c in ["ticker", "score", "pass", "down_from_high_%", "from_low_x", "base_ratio"] if c in d.columns]
+    print("   " + d[cols].to_string(index=False).replace("\n", "\n   "))
+
+
 def show_ledger(path):
     if not os.path.exists(path):
         print("   (장부 없음 — 아직 채점된 거래 없음)")
@@ -65,6 +81,8 @@ def regular():
     print("=" * 72)
     print(" ▶ 추천종목 (pullback)")
     show_picks(latest_dated("pullback"), "(본장 최신 픽 파일 없음 — daily.yml 실행 필요)")
+    print(" ▶ 캔들-베이스 교차검증 통과 (후보 축소)")
+    show_candle_verified(latest_dated("candle_verified"))
     print(" ▶ 누적 성적 (verification_ledger)")
     show_ledger(os.path.join(OUT, "verification_ledger.csv"))
 
