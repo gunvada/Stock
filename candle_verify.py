@@ -100,15 +100,18 @@ def evaluate_ticker(ticker):
             for row in zip(df["Open"], df["High"], df["Low"], df["Close"])]
     if not ohlc:
         return {"ticker": ticker, "error": "유효 일봉 없음"}
-    sigs = recent_bullish_signals(ohlc)
+    sigs = recent_bullish_signals(ohlc)                 # 단일 캔들 신호
+    multi = cp.detect_multi(ohlc, lookback=LOOKBACK)    # 다중 캔들 패턴
     trend = _trend_of([float(c) for c in df["Close"]])
     last = ohlc[-1]
+    parts = [_fmt_signals(sigs)] if sigs else []
+    parts += [f"{m['pattern']}@D-{m['offset']}" for m in multi]
     return {
         "ticker": ticker,
-        "pass": bool(sigs),          # 통과는 캔들 신호 기준 (trend는 표시용)
-        "n_signals": len(sigs),
+        "pass": bool(sigs) or bool(multi),   # 단일/다중 신호 중 하나라도 (trend는 표시용)
+        "n_signals": len(sigs) + len(multi),
         "trend": trend,
-        "recent_signals": _fmt_signals(sigs),
+        "recent_signals": ", ".join(parts) if parts else "-",
         "last_candle": ",".join(cp.detect(*last)) or "-",
     }
 
