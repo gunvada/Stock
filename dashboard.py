@@ -38,7 +38,7 @@ def show_picks(path, none_msg):
     date = DATED.search(os.path.basename(path)).group(1)
     print(f"   최신 픽 ({date}) — {len(d)}종목")
     if not d.empty:
-        cols = [c for c in ["ticker", "gap_%", "vol_ratio", "dol_M",
+        cols = [c for c in ["ticker", "gap_%", "vol_ratio", "dol_M", "dol_avg10_M", "dol_x",
                             "매수참고", "손절", "익절목표"] if c in d.columns]
         print("   " + d[cols].to_string(index=False).replace("\n", "\n   "))
 
