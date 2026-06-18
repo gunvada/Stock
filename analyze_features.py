@@ -37,12 +37,12 @@ FEATURES = [
 ]
 
 
-def build_features(df, cfg):
+def build_features(df, cfg, ratio_min=None):
     sc = cfg["scan"]
     lookback = sc.get("lookback_trading_days", 7)
     dol_days = sc.get("dollar_baseline_days", 10)
     price_min, price_max = sc["price_min"], sc["price_max"]
-    watch = sc.get("watch_threshold", 10.0)
+    watch = ratio_min if ratio_min is not None else sc.get("watch_threshold", 10.0)
 
     out = []
     for t, g in df.groupby("ticker"):
@@ -134,16 +134,22 @@ def quintile_table(cand, feat):
 
 def main():
     cfg = scanner.load_config()
+    # 인자로 ratio 임계 조정 가능: python analyze_features.py 5  → 후보 폭↑(breadth 확대)
+    ratio_min = float(sys.argv[1]) if len(sys.argv) > 1 else None
     df = load_cache_long()
-    cand = build_features(df, cfg)
+    ndays = df["date"].nunique()
+    cand = build_features(df, cfg, ratio_min=ratio_min)
     if cand.empty:
         sys.exit("후보 없음.")
     out_path = os.path.join(scanner.OUTPUT_DIR, "feature_analysis.csv")
     cand.to_csv(out_path, index=False, encoding="utf-8-sig")
 
-    print(f"[표본] {len(cand)}건 (폭증후보 ratio≥{cfg['scan']['watch_threshold']:.0f}, "
-          f"다음날 시초→종가 순익, 비용 {COST}%)")
-    print(f"  전체 순익평균 {cand['fwd_oc_net_%'].mean():+.1f}% | 상승 {(cand['fwd_oc_net_%']>0).mean()*100:.0f}%\n")
+    thr = ratio_min if ratio_min is not None else cfg["scan"]["watch_threshold"]
+    n_tk = cand["ticker"].nunique()
+    print(f"[표본] {len(cand)}건 / 서로다른종목 {n_tk}개 / 캐시 {ndays}거래일 "
+          f"(폭증후보 ratio≥{thr:.0f}, 다음날 시초→종가, 비용 {COST}%)")
+    print(f"  종목당 평균등장 {len(cand)/n_tk:.2f}회 | "
+          f"전체 순익평균 {cand['fwd_oc_net_%'].mean():+.1f}% | 상승 {(cand['fwd_oc_net_%']>0).mean()*100:.0f}%\n")
 
     # 변별력 순으로 정렬해 요약
     summ = []

@@ -54,12 +54,12 @@ def load_cache_long():
     return df.sort_values(["ticker", "date"]).reset_index(drop=True)
 
 
-def build_candidates(df, cfg):
+def build_candidates(df, cfg, ratio_min=None):
     """전종목 long df → 폭증 후보 행 + 직전7거래일상승률 + 다음날 성과."""
     sc = cfg["scan"]
     lookback = sc.get("lookback_trading_days", 7)
     price_min, price_max = sc["price_min"], sc["price_max"]
-    watch = sc.get("watch_threshold", 10.0)
+    watch = ratio_min if ratio_min is not None else sc.get("watch_threshold", 10.0)
 
     out = []
     for t, g in df.groupby("ticker"):
@@ -127,12 +127,15 @@ def cohort_table(cand, col="fwd_oc_net_%"):
 
 def main():
     cfg = scanner.load_config()
+    ratio_min = float(sys.argv[1]) if len(sys.argv) > 1 else None
     df = load_cache_long()
     ndates = df["date"].nunique()
     print(f"[데이터] 캐시 {ndates}거래일 ({df['date'].min()}~{df['date'].max()}), 전종목 {df['ticker'].nunique():,}개")
-    cand = build_candidates(df, cfg)
+    cand = build_candidates(df, cfg, ratio_min=ratio_min)
     if cand.empty:
         sys.exit("후보 없음 — 캐시 일수가 부족하거나 필터가 과함.")
+    print(f"[breadth] 분석표본 서로다른종목 {cand['ticker'].nunique()}개 / 종목당 평균등장 "
+          f"{len(cand)/cand['ticker'].nunique():.2f}회")
 
     out_path = os.path.join(scanner.OUTPUT_DIR, "prior_runup_analysis.csv")
     cand.to_csv(out_path, index=False, encoding="utf-8-sig")
