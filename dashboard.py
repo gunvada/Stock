@@ -87,7 +87,7 @@ def show_window(path):
     r, n = d["ret_%"], len(d)
     print(f"   누적 {n}거래 | gross 평균 {r.mean():+.2f}% | 승률 {(r>0).mean()*100:.0f}%"
           + (f" | net평균 {d['net_%'].mean():+.2f}%" if "net_%" in d.columns else ""))
-    cols = [c for c in ["trade_date", "ticker", "entry_0930", "exit_1030", "ret_%"] if c in d.columns]
+    cols = [c for c in ["trade_date", "ticker", "entry_0530", "exit_0930", "ret_%"] if c in d.columns]
     print("   최근 5거래:")
     print("   " + d[cols].tail(5).to_string(index=False).replace("\n", "\n   "))
 
@@ -118,7 +118,7 @@ def regular():
     show_candle_verified(latest_dated("candle_verified"))
     print(" ▶ 누적 성적 (verification_ledger · 종가청산)")
     show_ledger(os.path.join(OUT, "verification_ledger.csv"))
-    print(" ▶ 윈도우 시뮬 (KST 22:30매수→23:30매도 · Top5)")
+    print(" ▶ 윈도우 시뮬 (KST 18:30매수→22:30개장매도 · Top5)")
     show_window(os.path.join(OUT, "window_sim_ledger.csv"))
     print(" ▶ 실매매 저널 (raw, 룰없음)")
     show_manual(os.path.join(OUT, "manual_trades.csv"))
