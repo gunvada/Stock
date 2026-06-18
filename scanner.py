@@ -188,6 +188,11 @@ def compute_surge(df, cfg):
         ratio = latest_vol / baseline
         dollar_vol = latest_vol * latest_close
 
+        # 신호일 갭(전일종가 대비 시초): 특성분석상 갭하락 후보가 다음날 최악(-4.7%).
+        prev_close = float(prior.iloc[-1]["close"])
+        signal_gap = ((float(latest["open"]) - prev_close) / prev_close * 100
+                      if prev_close > 0 and latest["open"] else 0.0)
+
         # 평균 거래대금(직전 dol_days 거래일) + 거래대금 폭증 배율
         dprior = prior.tail(dol_days)
         d_series = (dprior["volume"] * dprior["close"])
@@ -203,6 +208,11 @@ def compute_surge(df, cfg):
         if latest_vol < sc["min_latest_volume"]:
             continue
         if dollar_vol < sc["min_latest_dollar_volume"]:
+            continue
+        # 갭 하한 필터(옵션): min_signal_gap_pct 가 설정되면 신호일 갭하락/약갭 후보 제외.
+        # 기본 None(미적용). 특성분석(feature_analysis) 근거 — 갭상승 코호트 승률 우위.
+        min_gap = sc.get("min_signal_gap_pct", None)
+        if min_gap is not None and signal_gap < min_gap:
             continue
 
         day_change = 0.0
@@ -224,6 +234,7 @@ def compute_surge(df, cfg):
                 "dollar_volume_M": round(dollar_vol / 1e6, 2),
                 "avg_dollar_vol_10d_M": round(avg_dollar_vol / 1e6, 2),
                 "dollar_surge_x": round(dollar_surge_x, 1),
+                "signal_gap_%": round(signal_gap, 1),
                 "intraday_chg_%": round(day_change, 1),
                 "candle_signal": sig["verdict"],
                 "candle_shape": sig["shape"],

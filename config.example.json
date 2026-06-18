@@ -16,6 +16,7 @@
 
     "baseline_method": "median",
     "dollar_baseline_days": 10,
+    "min_signal_gap_pct": null,
     "top_n": 40,
 
     "candle_filter": {
