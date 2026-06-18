@@ -106,6 +106,68 @@ def has_bullish_signal(o, h, l, c):
     return any(lbl in BULLISH_LABELS for lbl in detect(o, h, l, c))
 
 
+# --------------------------------------------------------------------------- #
+# 다중 캔들(캔들군) 상승 신호 — 드라이브 '기본캔들과 캔들패턴' / 캔들(군) 신호 교재 기반
+#   · 상승 펀치 : 위꼬리 양봉 + 아래꼬리 양봉 연속(엇비슷한 크기) — 큰 양봉군 선상
+#   · 상승 다람쥐: 양봉 + 작은 음봉/도지 + 작은 양봉(또는 양봉팽이)
+#   · 긴 위꼬리 : 몸통 작고 위꼬리 긴 캔들. 2개+ 모이면 '꼬리군'(자체로 매수신호)
+# seq 는 (o,h,l,c) 의 리스트(오래된→최신). 각 함수는 'seq 의 끝'에서 성립 여부 판단.
+# --------------------------------------------------------------------------- #
+def is_long_upper_wick(o, h, l, c):
+    """긴 위꼬리 캔들(양/음 무관): 위꼬리가 몸통보다 길고 아래꼬리는 짧다."""
+    g = geometry(o, h, l, c)
+    if not g:
+        return False
+    return (g["upper_r"] >= UWICK_YANG_MIN
+            and g["lower_r"] <= SHORT_WICK
+            and g["body_r"] <= g["upper_r"])
+
+
+def is_rising_punch(seq):
+    """상승 펀치: 마지막 2봉이 (위꼬리 양봉 → 아래꼬리 양봉) 연속. 둘 다 양봉."""
+    if len(seq) < 2:
+        return False
+    g1, g2 = geometry(*seq[-2]), geometry(*seq[-1])
+    if not (g1 and g2 and g1["bull"] and g2["bull"]):
+        return False
+    first_upper = g1["upper_r"] >= SIDE_WICK_MIN and g1["upper_r"] >= g1["lower_r"]
+    second_lower = g2["lower_r"] >= SIDE_WICK_MIN and g2["lower_r"] >= g2["upper_r"]
+    return first_upper and second_lower
+
+
+def is_rising_squirrel(seq):
+    """상승 다람쥐: 마지막 3봉이 (양봉 → 작은 음봉/도지 → 작은 양봉)."""
+    if len(seq) < 3:
+        return False
+    g0, g1, g2 = (geometry(*seq[-3]), geometry(*seq[-2]), geometry(*seq[-1]))
+    if not (g0 and g1 and g2):
+        return False
+    first_yang = g0["bull"] and g0["body_r"] >= 0.30
+    mid_small = g1["body_r"] <= SMALL_BODY_MAX            # 작은 음봉 또는 도지
+    last_small_yang = g2["bull"] and g2["body_r"] <= SMALL_BODY_MAX
+    return first_yang and mid_small and last_small_yang
+
+
+# 다중 캔들 라벨 → 판별함수 (모두 상승 성질)
+_SEQ_DETECTORS = {
+    "상승펀치": is_rising_punch,
+    "상승다람쥐": is_rising_squirrel,
+}
+
+
+def detect_seq(seq):
+    """seq 끝에서 성립하는 다중 캔들 상승 신호 라벨 리스트(정렬).
+    '꼬리군'(긴위꼬리 2개+ 연속)도 함께 판정. seq=(o,h,l,c) 오래된→최신."""
+    out = [name for name, fn in _SEQ_DETECTORS.items() if fn(seq)]
+    if len(seq) >= 2 and all(is_long_upper_wick(*b) for b in seq[-2:]):
+        out.append("꼬리군")        # 긴 위꼬리 2개+ 연속 = 꼬리군(자체로 매수신호)
+    return sorted(out)
+
+
+# 다중 캔들 신호도 모두 상승(매수) 성질로 본다
+BULLISH_SEQ_LABELS = {"상승펀치", "상승다람쥐", "꼬리군"}
+
+
 if __name__ == "__main__":
     demo = [
         ("양봉스프링", 10, 10.92, 9.95, 10.90),

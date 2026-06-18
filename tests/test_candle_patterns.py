@@ -55,6 +55,33 @@ def test_big_plain_yang_not_misclassified():
     assert not cp.is_upper_wick_yang(o, h, l, c)  # 아래꼬리 김
 
 
+def test_rising_punch_seq():
+    # 위꼬리 양봉 → 아래꼬리 양봉 연속 = 상승펀치
+    seq = [(10, 10.6, 9.95, 10.30), (10.3, 10.6, 10.0, 10.45)]
+    assert cp.is_rising_punch(seq)
+    assert "상승펀치" in cp.detect_seq(seq)
+
+
+def test_rising_squirrel_seq():
+    # 양봉 → 작은 음봉 → 작은 양봉 = 상승다람쥐
+    seq = [(10, 10.5, 9.95, 10.40), (10.4, 10.45, 10.25, 10.35), (10.35, 10.45, 10.30, 10.40)]
+    assert cp.is_rising_squirrel(seq)
+    assert "상승다람쥐" in cp.detect_seq(seq)
+
+
+def test_tail_cluster_seq():
+    # 긴 위꼬리 2개 연속 = 꼬리군
+    seq = [(10, 10.6, 9.97, 10.12), (10.1, 10.7, 10.05, 10.20)]
+    assert cp.is_long_upper_wick(*seq[-1])
+    assert "꼬리군" in cp.detect_seq(seq)
+
+
+def test_seq_short_input_safe():
+    # 봉 수 부족해도 예외 없이 빈 결과
+    assert cp.detect_seq([(10, 10.5, 9.9, 10.2)]) == []
+    assert not cp.is_rising_punch([])
+
+
 def _run():
     fns = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
     for fn in fns:
