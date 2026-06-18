@@ -92,6 +92,97 @@ python verify.py
 | `vol_tolerance_pct` | Polygon↔Yahoo 거래량 허용 편차(%) | 25 |
 | `use_stooq` | Stooq 3차 대조 사용 | true |
 
+## GitHub 전략 수집 (collect_strategies.py) — 벤치마킹 1단계
+GitHub에서 '주식/알고리즘 트레이딩 전략' 레포를 긁어와, 각 README가 **주장하는**
+수익률·CAGR·Sharpe·승률을 한 표로 정리한다. "수익률 20% 넘는 코드 벤치마킹"의
+**1단계(후보 수집)**.
+```powershell
+python collect_strategies.py
+```
+- **GitHub Search API**로 키워드(config `collect.queries`) × star 정렬 상위 레포 수집.
+- 각 README에서 `수익률/return/CAGR/Sharpe/win rate/승률` 숫자를 정규식으로 추출.
+- 결과는 `output\strategies_<날짜>.csv` 저장. `claimed_return_%` 내림차순 정렬.
+
+> ⚠️ **`claimed_return_%`·`sharpe`·`win_rate_%` 는 README의 '주장값'일 뿐**입니다.
+> 거의 다 비검증 백테스트 수치라 과최적화·미래참조(look-ahead)·생존편향·수수료
+> 누락이 섞여 있을 수 있어 **그대로 믿으면 안 됩니다.** 진짜 벤치마킹(2단계)은
+> `has_backtest=True` 인 전략의 로직을 가져와 본인 데이터(Polygon/yfinance)로
+> `backtest.py` 계열로 **직접 재검증**해야 합니다.
+
+토큰을 넣으면 검색 한도가 크게 올라갑니다(미인증 10회/분 → 인증 30회/분, README
+조회 60/시간 → 5000/시간). 없어도 동작은 하지만 느립니다:
+```powershell
+$env:GITHUB_TOKEN = "ghp_..."   # 또는 config.json 의 "github_token"
+```
+
+### collect 설정 (config.json → "collect" 섹션, 선택)
+| 키 | 의미 | 기본 |
+|---|---|---|
+| `queries` | 검색 키워드 목록 | (트레이딩 전략 4종) |
+| `per_query` | 쿼리당 상위 레포 수 | 30 |
+| `min_stars` | 최소 star | 20 |
+| `claim_threshold_pct` | "주장 수익률 N% 이상" 강조 기준 | 20 |
+| `search_sleep_seconds` | 검색 호출 간 대기(미인증 보호) | 7 |
+
+## 전략 재검증 (benchmark.py) — 벤치마킹 2단계
+1단계가 모은 레포들이 "수익률 20%+"라 **주장**하는 전략 유형을, **임의 코드를
+돌리는 대신 투명하게 재구현**해 과거 데이터로 정직하게 백테스트하고 **매수 후
+보유(buy & hold) 기준선**과 비교한다.
+```powershell
+python benchmark.py
+```
+정직한 회계의 3원칙:
+- **look-ahead 차단** — 신호는 t일 종가까지의 정보로만 결정 → t→t+1 수익에 적용
+- **거래비용 반영** — 포지션 변경 1회당 `cost_bps`(기본 5bps) 차감
+- **buy & hold 비교** — 이걸 못 이기면 그 전략은 (비용·세금 감안 시) 의미 없음
+
+재구현한 전략 유형: `buy_hold`(기준선), `sma_50_200`(골든크로스),
+`momentum_200`(시계열 모멘텀), `rsi_meanrev`(RSI 평균회귀), `donchian_20_10`(돌파 추세추종).
+종목별로 돌린 뒤 **중앙값**으로 집계(한 종목 운 배제). 결과는
+`output\benchmark_<날짜>.csv`(집계)와 `benchmark_detail_<날짜>.csv`(종목×전략)로 저장.
+
+> 예시(SPY/QQQ/AAPL/MSFT/NVDA, 10년, 5bps): buy_hold가 CAGR·Sharpe 모두 1위로,
+> 능동전략 어느 것도 buy_hold의 CAGR을 못 이김. 능동전략은 MDD(낙폭)는 줄였지만
+> 수익률을 함께 깎아먹는 전형적 트레이드오프를 보였다. → README의 '주장 20%+'는
+> 이런 정직한 회계에서 검증되기 전엔 믿을 수 없다는 방증.
+
+> ⚠️ 이 수치도 '이 바스켓·이 기간'의 과거 결과일 뿐 미래를 보장하지 않는다.
+> 목적은 주장 수익률을 정직한 회계로 다시 재보는 것이지 매매 신호가 아니다.
+
+### benchmark 설정 (config.json → "benchmark" 섹션, 선택)
+| 키 | 의미 | 기본 |
+|---|---|---|
+| `tickers` | 백테스트 종목 바스켓 | SPY/QQQ/AAPL/MSFT/NVDA |
+| `period` | yfinance 기간 문자열 | 10y |
+| `cost_bps` | 포지션 변경 1회당 비용(bps) | 5 |
+| `rf_annual` | 무위험수익률(연, Sharpe용) | 0 |
+
+## 한국 전 종목 스캔 (kr_scanner.py)
+Polygon은 미국 시장만 커버하므로, 한국은 **무료·키불필요 소스 두 개를 조합**해
+전 종목 거래량 폭증 스캔을 구현한다.
+```powershell
+python kr_scanner.py
+```
+- **유니버스 + 당일 스냅샷**: `FinanceDataReader.StockListing('KRX')` — 코스피/코스닥
+  전 종목 코드·이름·시장·시총·당일 거래량을 한 번에. (KRX가 OHLCV API를 로그인
+  인증제로 바꿔 pykrx 전종목 시세는 막힘 → 유니버스는 FDR로 대체)
+- **과거 일별 거래량**: yfinance 배치(코드+`.KS`/`.KQ`). 당일 거래량 상위
+  `prefilter_top_by_volume`개만 받아 폭증 배율(최신 ÷ 직전중앙값)을 계산.
+- 폭증 로직·필터는 `scanner.py`와 동일. 결과는 `output\kr_surge_<날짜>.csv` 저장.
+
+### kr_scan 설정 (config.json → "kr_scan" 섹션, 선택)
+| 키 | 의미 | 기본 |
+|---|---|---|
+| `lookback_trading_days` | 비교 기간(거래일) | 7 |
+| `volume_surge_threshold` / `watch_threshold` | 폭증 / 관찰 배율 | 50 / 10 |
+| `price_min` / `price_max` | 가격대(원) | 1,000 ~ 200,000 |
+| `min_latest_volume` / `min_baseline_avg_volume` | 당일 / 평소 최소 거래량(주) | 100,000 / 30,000 |
+| `min_latest_trade_value` | 당일 최소 거래대금(원) | 5억 |
+| `prefilter_top_by_volume` | yfinance 부하 제한용 후보 상한 | 700 |
+
+> ⚠️ FinanceDataReader·yfinance 모두 무료·비공식 소스입니다. 데이터가 늦거나
+> 빠질 수 있고, 폭증주는 상·하한가 등 변동성이 극심합니다. 매매 신호 아님.
+
 ## 결과 컬럼
 | 컬럼 | 의미 |
 |---|---|

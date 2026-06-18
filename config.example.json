@@ -20,5 +20,34 @@
     "exclude_recent_splits": true,
     "split_lookback_days": 30,
     "split_filter_mode": "reverse"
+  },
+
+  "collect": {
+    "queries": [
+      "algorithmic trading strategy backtest",
+      "quant trading python returns",
+      "stock trading bot backtest",
+      "trading strategy sharpe ratio"
+    ],
+    "per_query": 30,
+    "min_stars": 20,
+    "claim_threshold_pct": 20.0,
+    "max_readme_bytes": 200000,
+    "search_sleep_seconds": 7
+  },
+
+  "kr_scan": {
+    "lookback_trading_days": 7,
+    "volume_surge_threshold": 50.0,
+    "watch_threshold": 10.0,
+    "price_min": 1000,
+    "price_max": 200000,
+    "min_baseline_avg_volume": 30000,
+    "min_latest_volume": 100000,
+    "min_latest_trade_value": 500000000,
+    "markets": ["KOSPI", "KOSDAQ"],
+    "prefilter_top_by_volume": 700,
+    "yf_chunk": 150,
+    "top_n": 40
   }
 }
