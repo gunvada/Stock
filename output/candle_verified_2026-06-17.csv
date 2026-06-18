@@ -1,0 +1,8 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+CRVO,True,2,하락,"위꼬리양봉@D-4, 꼬리군@D-2",-
+UTSI,True,1,상승,위꼬리양봉@D-2,-
+IVDA,True,1,횡보,양봉스프링@D-4,-
+CLPT,False,0,횡보,-,-
+TGE,False,0,하락,-,-
+CNTX,False,0,횡보,-,-
+ERNA,False,0,하락,-,-
