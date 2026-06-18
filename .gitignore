@@ -17,3 +17,4 @@ tmp_*.py
 output/feature_analysis.csv
 output/prior_runup_analysis.csv
 output/candle_edge_analysis.csv
+output/premarket_backtest.csv
