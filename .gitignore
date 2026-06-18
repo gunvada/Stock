@@ -12,3 +12,7 @@ tmp_*.py
 
 # 로컬 Claude 설정 (프로젝트 무관)
 .claude/
+
+# 파생 분석 산출물(캐시에서 매 실행 재생성 → 추적 제외, 결론은 dashboard.html에 보존)
+output/feature_analysis.csv
+output/prior_runup_analysis.csv
