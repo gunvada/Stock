@@ -23,6 +23,7 @@ except Exception:
 BASE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(BASE, "output")
 DATED = re.compile(r"_(\d{4}-\d{2}-\d{2})\.csv$")
+DOL_X_EXTREME = 500   # 거래대금 증가배 이 이상 = 1회성 초폭증(평소 거래無) → 회피 권고
 
 
 def latest(prefix):
@@ -49,6 +50,8 @@ def verdict(dol_x, dol_M, candle_pass):
         return "—"
     if x < 1:
         return "🔴회피(돈식음)"
+    if x >= DOL_X_EXTREME:
+        return "🔴회피(과대·1회성)"   # 증가배 과대 = 평소 거의 거래無 → 급반전 위험(예: UTSI 3670×)
     sc = int(bool(candle_pass)) + (x >= 3) + (dm >= 10)
     return ["🟠관망", "🟠주의", "🟡양호", "🟢우수"][min(sc, 3)]
 
@@ -80,7 +83,8 @@ def picks_section():
     s = f"## 🎯 오늘의 추천 픽 (본장) — 신호일 {date}\n\n"
     s += md_table(out, ["종목", "종가", "거래대금M", "10일평균M", "증가배",
                         "매수참고", "손절", "익절", "캔들", "추세", "판정"])
-    s += "\n_판정: 🟢우수 / 🟡양호 / 🟠주의 / 🔴회피(거래대금 식음). 캔들=교차검증 통과._\n"
+    s += ("\n_판정: 🟢우수 / 🟡양호 / 🟠주의 / 🔴회피(증가배<1 돈식음 또는 ≥"
+          f"{DOL_X_EXTREME}배 과대·1회성). 캔들=교차검증 통과._\n")
     return s
 
 
