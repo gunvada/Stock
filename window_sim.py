@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-개장 첫 1시간 윈도우 시뮬레이션 (KST 22:30 매수 → 23:30 매도)
+프리마켓→개장 윈도우 시뮬레이션 (KST 18:30 매수 → 22:30 매도)
 ===============================================================
-어제 종가 기준 본장 Top5 픽을, 다음 거래일 **ET 09:30 매수 → 10:30 매도**
-(= KST 22:30 → 23:30, 회원 매매창)로 시뮬해 거래내역 장부에 매일 누적한다.
-데이터: yfinance 5분봉(최근 ~60일, 정규장). API 키 불필요.
+어제 종가 기준 본장 Top5 픽을, 다음 거래일 **ET 05:30 매수 → 09:30(개장) 매도**
+(= KST 18:30 → 22:30, 회원 매매창1)로 시뮬해 거래내역 장부에 매일 누적한다.
+데이터 비교상 '프리마켓 상승 → 개장 투매' 패턴 때문에 개장 전 청산이 유리.
+데이터: yfinance 5분봉(prepost, 최근 ~60일). API 키 불필요.
 
-픽 파일(pullback_<신호일>.csv)별로 '매매일(다음 거래일) 5분봉이 풀린 것'을
+픽 파일(pullback_<신호일>.csv)별로 '매매일(다음 거래일) 데이터가 풀린 것'을
 자동 감지·채점하고 output/window_sim_ledger.csv 에 누적(이미 채점분은 스킵).
 
 사용법: python window_sim.py
@@ -27,13 +28,13 @@ except Exception:
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 LEDGER = os.path.join(OUT, "window_sim_ledger.csv")
 TOP_N = 5
-COST = 1.0            # 왕복 비용 가정(%) — 페니 스프레드(표시용, net 컬럼)
-ENTRY_T, EXIT_T = "09:30", "10:30"   # ET (= KST 22:30 / 23:30, EDT)
+COST = 1.0            # 왕복 비용 가정(%) — 프리마켓 스프레드(표시용, net 컬럼)
+ENTRY_T, EXIT_T = "05:30", "09:30"   # ET (= KST 18:30 매수 / 22:30 개장 매도, EDT)
 
 
 def window_prices(bars):
-    """bars: [(hhmm, open), ...] 09:30~10:30 정규 5분봉(시간순).
-    반환: (entry=09:30 시가, exit=10:30 시가). 부족하면 None. 순수 함수."""
+    """bars: [(hhmm, open), ...] 05:30~09:30 5분봉(prepost, 시간순).
+    반환: (entry=05:30 프리마켓 시가, exit=09:30 개장 시가). 부족하면 None. 순수 함수."""
     if len(bars) < 2:
         return None
     entry = bars[0][1]
@@ -50,7 +51,7 @@ def fetch_window(ticker, date):
     end = start + dt.timedelta(days=1)
     try:
         df = yf.Ticker(ticker).history(start=start.isoformat(), end=end.isoformat(),
-                                       interval="5m", prepost=False, auto_adjust=False)
+                                       interval="5m", prepost=True, auto_adjust=False)
     except Exception:
         return []
     if df is None or df.empty:
@@ -103,16 +104,16 @@ def main():
             entry, exit_ = wp
             ret = (exit_ - entry) / entry * 100
             scored.append({"signal_date": sig, "trade_date": trade, "ticker": t,
-                           "entry_0930": round(entry, 4), "exit_1030": round(exit_, 4),
+                           "entry_0530": round(entry, 4), "exit_0930": round(exit_, 4),
                            "ret_%": round(ret, 2), "net_%": round(ret - COST, 2)})
         if not scored:
-            print(f"[대기] {sig} → {trade} 5분봉 데이터 없음(조회 실패/장 미개장).")
+            print(f"[대기] {sig} → {trade} 프리마켓 5분봉 없음(조회 실패/데이터 미공개).")
             continue
         new_rows += scored
         d = pd.DataFrame(scored)
-        print(f"[거래내역] {sig}픽 → {trade} 09:30→10:30 (Top{len(scored)})")
+        print(f"[거래내역] {sig}픽 → {trade} 프리05:30→개장09:30 (Top{len(scored)})")
         for s in scored:
-            print(f"     {s['ticker']:6s} 매수 {s['entry_0930']} → 매도 {s['exit_1030']}  "
+            print(f"     {s['ticker']:6s} 매수 {s['entry_0530']} → 매도 {s['exit_0930']}  "
                   f"{s['ret_%']:+.2f}% (net {s['net_%']:+.2f}%)")
         print(f"     ▶ 당일 평균 {d['ret_%'].mean():+.2f}% (net {d['net_%'].mean():+.2f}%) · "
               f"승 {(d['ret_%']>0).sum()}/{len(d)}")
@@ -122,7 +123,7 @@ def main():
         led.to_csv(LEDGER, index=False, encoding="utf-8-sig")
         n = len(led)
         print("\n" + "=" * 70)
-        print(f"  윈도우 시뮬 누적 (KST 22:30매수→23:30매도, 총 {n}거래)")
+        print(f"  윈도우 시뮬 누적 (KST 18:30매수→22:30개장매도, 총 {n}거래)")
         print("=" * 70)
         print(f"  gross 평균 {led['ret_%'].mean():+.2f}% · net(비용{COST}%) {led['net_%'].mean():+.2f}%")
         print(f"  승률 {(led['ret_%']>0).mean()*100:.0f}% ({(led['ret_%']>0).sum()}/{n})")
