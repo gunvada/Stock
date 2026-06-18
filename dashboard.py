@@ -199,6 +199,21 @@ def sec_insights():
                              f"n={len(ext)} · 과열 상한 근거", "bad")
                  + stat_card("분석 종목수", f"{pr['ticker'].nunique():,}", "breadth"))
         out.append(f"<div class='cards'>{cards}</div>")
+
+    # 전략 검증 종합 — 기계적 엣지 부재 → 재량적 워치리스트로 확정
+    out.append("<h3>전략 검증 종합 — 기계적 엣지는 없다 (∴ 재량 워치리스트)</h3>")
+    out.append("<table><thead><tr><th>청산 전략</th><th>순익/거래</th><th>판정</th></tr></thead><tbody>"
+               "<tr><td class='tk'>다음날 시초→종가</td><td class='neg'>−2.9%</td><td>엣지 없음</td></tr>"
+               "<tr><td class='tk'>프리마켓 06:30→09:30 개장가</td><td class='neg'>−1.1%</td><td>엣지 없음</td></tr>"
+               "<tr><td class='tk'>프리마켓 +8% TP</td><td class='neg'>−0.2%</td><td>break-even</td></tr>"
+               "<tr><td class='tk'>프리마켓 TP10/STOP10</td><td class='neg'>−0.6%</td><td>엣지 없음</td></tr>"
+               "<tr><td class='tk'>캔들신호·종합점수 변별력</td><td class='zero'>~0</td><td>모든 변형서 무력</td></tr>"
+               "</tbody></table>")
+    out.append("<ul class='ins'>"
+               "<li>종목들은 장중 +9~14% 솟구치나(펌프) 타이밍이 규칙으로 안 잡히고, 왕복 2.5% 비용이 저가주에 큰 허들.</li>"
+               "<li><b>∴ 이 도구는 '매매 신호'가 아니라 장 전에 주목 종목을 좁혀주는 <span style='color:#5b9dff'>재량적 워치리스트</span>다.</b> "
+               "픽은 회원님의 눈·뉴스·호가로 직접 판단할 후보이며, 장부는 자동 수익이 아닌 학습·기록용.</li>"
+               "</ul>")
     return "".join(out)
 
 
@@ -263,11 +278,12 @@ def main():
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>볼륨서지 스캐너 대시보드</title><style>{CSS}</style></head>
 <body><div class="wrap">
-<header><h1>📈 <span class="em">볼륨서지</span> 스캐너 대시보드</h1>
+<header><h1>📈 <span class="em">볼륨서지</span> 재량 워치리스트</h1>
 <span class="ts">생성 {now:%Y-%m-%d %H:%M}</span></header>
 {body}
-<footer>※ 본 대시보드의 모든 수치는 후보·모니터링 자료이며 매매 신호가 아닙니다.
-변동성 극심 — 소액·리스크 관리 필수. 표본이 작아 통계는 누적될수록 신뢰도가 올라갑니다.</footer>
+<footer>※ 본 도구는 <b>매매 신호가 아닌 재량적 워치리스트</b>입니다 — 283일 백테스트 결과
+기계적 진입/청산 규칙에는 검증된 엣지가 없었습니다(전략 검증 종합 참조). 픽은 장 전에 주목할
+'후보'이며, 최종 판단은 본인 몫입니다. 변동성 극심 — 소액·리스크 관리 필수.</footer>
 </div></body></html>"""
 
     path = os.path.join(OUT, "dashboard.html")
