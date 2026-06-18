@@ -157,6 +157,32 @@ python benchmark.py
 | `cost_bps` | 포지션 변경 1회당 비용(bps) | 5 |
 | `rf_annual` | 무위험수익률(연, Sharpe용) | 0 |
 
+## 한국 전 종목 스캔 (kr_scanner.py)
+Polygon은 미국 시장만 커버하므로, 한국은 **무료·키불필요 소스 두 개를 조합**해
+전 종목 거래량 폭증 스캔을 구현한다.
+```powershell
+python kr_scanner.py
+```
+- **유니버스 + 당일 스냅샷**: `FinanceDataReader.StockListing('KRX')` — 코스피/코스닥
+  전 종목 코드·이름·시장·시총·당일 거래량을 한 번에. (KRX가 OHLCV API를 로그인
+  인증제로 바꿔 pykrx 전종목 시세는 막힘 → 유니버스는 FDR로 대체)
+- **과거 일별 거래량**: yfinance 배치(코드+`.KS`/`.KQ`). 당일 거래량 상위
+  `prefilter_top_by_volume`개만 받아 폭증 배율(최신 ÷ 직전중앙값)을 계산.
+- 폭증 로직·필터는 `scanner.py`와 동일. 결과는 `output\kr_surge_<날짜>.csv` 저장.
+
+### kr_scan 설정 (config.json → "kr_scan" 섹션, 선택)
+| 키 | 의미 | 기본 |
+|---|---|---|
+| `lookback_trading_days` | 비교 기간(거래일) | 7 |
+| `volume_surge_threshold` / `watch_threshold` | 폭증 / 관찰 배율 | 50 / 10 |
+| `price_min` / `price_max` | 가격대(원) | 1,000 ~ 200,000 |
+| `min_latest_volume` / `min_baseline_avg_volume` | 당일 / 평소 최소 거래량(주) | 100,000 / 30,000 |
+| `min_latest_trade_value` | 당일 최소 거래대금(원) | 5억 |
+| `prefilter_top_by_volume` | yfinance 부하 제한용 후보 상한 | 700 |
+
+> ⚠️ FinanceDataReader·yfinance 모두 무료·비공식 소스입니다. 데이터가 늦거나
+> 빠질 수 있고, 폭증주는 상·하한가 등 변동성이 극심합니다. 매매 신호 아님.
+
 ## 결과 컬럼
 | 컬럼 | 의미 |
 |---|---|
