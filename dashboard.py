@@ -179,25 +179,25 @@ def sec_ledgers():
 
 
 def sec_insights():
-    out = ["<h2>🔬 분석 인사이트</h2>"]
-    # 특성 변별력
-    fa = os.path.join(OUT, "feature_analysis.csv")
-    if os.path.exists(fa):
-        out.append("<h3>직전상승률 가설 검정 & 특성 변별력</h3>")
-        out.append("<ul class='ins'>"
-                   "<li><b>평균회귀 가설 기각</b>: 직전 7일 100%+ 오른 폭증주가 다음날 더 유리(+2.0%) — 모멘텀 지속.</li>"
-                   "<li><b>갭하락 후보가 최악</b>(−4.7%) → 갭 하한 필터(min_signal_gap_pct) 도입.</li>"
-                   "<li><b>저가 분위 우세</b>($0.5대 +3.9%/45%) — 단 슬리피지 위험으로 가중만.</li>"
-                   "<li>단일 특성 상관은 모두 |0.08| 이하 — 표본 확대 후 재검증 필요.</li>"
-                   "</ul>")
+    out = ["<h2>🔬 분석 인사이트 <span class='sub'>(283거래일 / 6,420건 / 2,082종목 기준)</span></h2>"]
+    out.append("<h3>대표본 재검증 — 단일 특성 엣지는 대부분 노이즈였다</h3>")
+    out.append("<ul class='ins'>"
+               "<li><b>기초 성과</b>: 폭증주 다음날 시초→종가 평균 <b>−2.9%</b>·승률 30% — 평균적으론 손실. "
+               "엣지는 단일 지표가 아니라 캔들신호+상위픽 집중에서 찾아야 함.</li>"
+               "<li><b>직전 100%+ ≠ 불리</b>: 100%+ vs 미만 차이 +0.6%p(t≈0.5, 무의미). "
+               "작은 표본의 '모멘텀 우위'는 노이즈였음.</li>"
+               "<li><b>단, 200%+ 극단급등은 명확히 최악</b>(순익 −6.1%, n=210) — 과열 상한선의 근거.</li>"
+               "<li><b>그나마 일관된 약한 신호</b>: ①갭하락 후보 최악(−4.0%) ②고가($11대) 승률 20%로 저조 "
+               "→ 갭 하한·가격 상한이 약하게 지지됨(상관은 여전히 ~0).</li>"
+               "</ul>")
     pr = _read(os.path.join(OUT, "prior_runup_analysis.csv"))
     if not pr.empty and "prior7_%" in pr.columns:
-        hi = pr[pr["prior7_%"] >= 100]["fwd_oc_net_%"]
-        lo = pr[pr["prior7_%"] < 100]["fwd_oc_net_%"]
-        cards = (stat_card("직전100%+ 순익", f"{hi.mean():+.1f}%", f"n={len(hi)} · 상승{(hi>0).mean()*100:.0f}%",
-                           "good" if hi.mean() > 0 else "bad")
-                 + stat_card("직전100%미만 순익", f"{lo.mean():+.1f}%", f"n={len(lo)} · 상승{(lo>0).mean()*100:.0f}%",
-                             "good" if lo.mean() > 0 else "bad"))
+        base = pr["fwd_oc_net_%"]
+        ext = pr[pr["prior7_%"] >= 200]["fwd_oc_net_%"]
+        cards = (stat_card("폭증주 기초 순익", f"{base.mean():+.1f}%", f"n={len(base)} · 승률{(base>0).mean()*100:.0f}%", "bad")
+                 + stat_card("200%+ 급등군 순익", f"{ext.mean():+.1f}%" if len(ext) else "—",
+                             f"n={len(ext)} · 과열 상한 근거", "bad")
+                 + stat_card("분석 종목수", f"{pr['ticker'].nunique():,}", "breadth"))
         out.append(f"<div class='cards'>{cards}</div>")
     return "".join(out)
 
