@@ -41,7 +41,8 @@
   "recommend": {
     "require_verdicts": ["강한매수", "매수관심"],
     "top_n": 6,
-    "ratio_weight": 1.0
+    "ratio_weight": 1.0,
+    "dilution_check": true
   },
 
   "timing_study": {

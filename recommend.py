@@ -25,7 +25,10 @@ import os
 import re
 import sys
 import glob
+import time
+import datetime as dt
 
+import requests
 import pandas as pd
 
 import scanner
@@ -48,7 +51,48 @@ def rec_config(cfg):
     rc.setdefault("top_n", 6)
     # 종합 순번 = candle_score(마감강도+신호형태+추세위치 통합) + ratio_weight*log10(폭증배율)
     rc.setdefault("ratio_weight", 1.0)
+    # 희석 점검(Polygon 발행주식수 90일 변화) — 검증결과 펌프→페이드 구조원인. 픽당 2콜.
+    rc.setdefault("dilution_check", True)
     return rc
+
+
+def _shares_on(ticker, date, key):
+    """해당일 시점의 가중 발행주식수(Polygon 레퍼런스). 없으면 None."""
+    try:
+        r = requests.get(f"https://api.polygon.io/v3/reference/tickers/{ticker}",
+                         params={"date": date, "apiKey": key}, timeout=30).json()
+        res = r.get("results", {}) or {}
+        return res.get("weighted_shares_outstanding") or res.get("share_class_shares_outstanding")
+    except Exception:
+        return None
+
+
+def add_dilution(rec, sig_date, key, sleep_s=13):
+    """추천 픽에 발행주식수 90일 변화 + 희석 적신호 컬럼 추가.
+    검증: 다수 폭증주가 만성 희석(ATM)/액면병합 → 펌프→페이드의 구조적 원인."""
+    base_date = (dt.date.fromisoformat(sig_date) - dt.timedelta(days=90)).isoformat()
+    nows, chgs, flags = [], [], []
+    for t in rec["ticker"]:
+        now = _shares_on(t, sig_date, key); time.sleep(sleep_s)
+        base = _shares_on(t, base_date, key); time.sleep(sleep_s)
+        if now and base and base > 0:
+            chg = (now / base - 1) * 100
+            nows.append(round(now / 1e6, 1)); chgs.append(round(chg, 1))
+            if chg > 15:
+                flags.append("희석위험")
+            elif chg < -50:
+                flags.append("액면병합")
+            elif chg > 3:
+                flags.append("희석진행")
+            else:
+                flags.append("안정")
+        else:
+            nows.append(None); chgs.append(None); flags.append("?")
+    rec = rec.copy()
+    rec["shares_M"] = nows
+    rec["shares_chg_90d_%"] = chgs
+    rec["희석"] = flags
+    return rec
 
 
 def latest_surge_csv():
@@ -89,9 +133,15 @@ def produce(cfg):
 
     rec["매수참고"] = rec["latest_close"].round(3)
     rec["signal_date"] = sig_date
+
+    # 희석 점검(검증: 만성 희석/액면병합이 펌프→페이드의 구조원인) — 적신호 컬럼 부착
+    if rc.get("dilution_check"):
+        print(f"  [희석점검] Polygon 발행주식수 90일 변화 조회 중 ({len(rec)}종목 × 2콜)...")
+        rec = add_dilution(rec, sig_date, cfg["polygon_api_key"])
+
     cols = ["signal_date", "ticker", "rank_score", "ratio", "dollar_surge_x", "avg_dollar_vol_10d_M",
             "dollar_volume_M", "latest_close", "candle_signal", "candle_pos",
-            "close_pos", "candle_score", "intraday_chg_%", "매수참고"]
+            "close_pos", "candle_score", "intraday_chg_%", "shares_chg_90d_%", "희석", "매수참고"]
     cols = [c for c in cols if c in rec.columns]
     out = rec[cols]
 

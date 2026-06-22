@@ -110,12 +110,21 @@ def sec_picks():
     sig = re.search(r"recommend_(\d{4}-\d{2}-\d{2})", os.path.basename(p)).group(1)
     df = _read(p)
     cols = ["ticker", "rank_score", "ratio", "dollar_surge_x", "avg_dollar_vol_10d_M",
-            "candle_signal", "candle_pos", "close_pos", "매수참고"]
+            "candle_signal", "close_pos", "shares_chg_90d_%", "희석", "매수참고"]
     cols = [c for c in cols if c in df.columns]
-    head = ["종목", "종합점수", "거래량배율", "거래대금배율", "평균거래대금($M)",
-            "신호", "추세위치", "마감강도", "매수참고($)"]
-    head = head[:len(cols)]
+    headmap = {"ticker": "종목", "rank_score": "종합점수", "ratio": "거래량배율",
+               "dollar_surge_x": "거래대금배율", "avg_dollar_vol_10d_M": "평균거래대금($M)",
+               "candle_signal": "신호", "close_pos": "마감강도",
+               "shares_chg_90d_%": "주식수90일%", "희석": "희석점검", "매수참고": "매수참고($)"}
+    head = [headmap[c] for c in cols]
+    def dilbadge(v):
+        s = str(v)
+        cls = {"희석위험": "sell2", "액면병합": "sell2", "희석진행": "sell1",
+               "안정": "buy1"}.get(s, "neu")
+        return f'<td><span class="badge {cls}">{html.escape(s)}</span></td>'
     fmts = {"candle_signal": lambda v: f"<td>{verdict_badge(v)}</td>",
+            "희석": dilbadge,
+            "shares_chg_90d_%": lambda v: signed_cell(v),
             "ticker": lambda v: f'<td class="tk">{html.escape(str(v))}</td>'}
     t = table(df, cols, head, fmts)
     h = (f"<h2>📌 오늘의 추천 픽 <span class='sub'>(신호일 {sig} → 다음 거래일 매매)</span></h2>"
