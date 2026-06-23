@@ -1,0 +1,3 @@
+﻿trade_date,signal_date,rank,ticker,희석,entry_KST1830,exit_KST2229,ret_%,net_%,pnl_gross_KRW,pnl_net_KRW,notional_KRW
+2026-06-22,2026-06-18,1,NEOV,희석위험,2.7205,2.83,4.02,1.52,40250,15250,1000000
+2026-06-22,2026-06-18,2,EXFY,희석진행,1.57,1.61,2.55,0.05,25478,478,1000000
