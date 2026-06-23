@@ -53,6 +53,8 @@ def rec_config(cfg):
     rc.setdefault("ratio_weight", 1.0)
     # 희석 점검(Polygon 발행주식수 90일 변화) — 검증결과 펌프→페이드 구조원인. 픽당 2콜.
     rc.setdefault("dilution_check", True)
+    # 공매도 점검(yfinance 숏비중·DTC) — 숏스퀴즈 후보 포착용.
+    rc.setdefault("short_check", True)
     return rc
 
 
@@ -92,6 +94,37 @@ def add_dilution(rec, sig_date, key, sleep_s=13):
     rec["shares_M"] = nows
     rec["shares_chg_90d_%"] = chgs
     rec["희석"] = flags
+    return rec
+
+
+def add_short_interest(rec):
+    """공매도 잔고(yfinance) 점검: 숏비중·DTC(청산소요일) → 숏스퀴즈 후보 플래그.
+    높은 공매도 + 거래량 폭증 = 강제 환매(숏청산)로 급등 증폭 가능."""
+    import yfinance as yf
+    pcts, dtcs, flags = [], [], []
+    for t in rec["ticker"]:
+        try:
+            info = yf.Ticker(t).info
+            spf = info.get("shortPercentOfFloat")      # 부동주식 대비 공매도 비율(0~1)
+            dtc = info.get("shortRatio")               # days-to-cover
+        except Exception:
+            spf, dtc = None, None
+        pct = round(spf * 100, 1) if spf else None
+        dtcs.append(round(dtc, 1) if dtc else None)
+        pcts.append(pct)
+        # 스퀴즈 플래그: 숏비중 높고(환매 연료) + DTC 길수록(못 빠져나감) 유력
+        if pct is not None and (pct >= 20 or (pct >= 10 and (dtc or 0) >= 5)):
+            flags.append("스퀴즈후보")
+        elif pct is not None and pct >= 10:
+            flags.append("숏높음")
+        elif pct is not None:
+            flags.append("보통")
+        else:
+            flags.append("?")
+    rec = rec.copy()
+    rec["short_%float"] = pcts
+    rec["days_to_cover"] = dtcs
+    rec["숏스퀴즈"] = flags
     return rec
 
 
@@ -139,9 +172,15 @@ def produce(cfg):
         print(f"  [희석점검] Polygon 발행주식수 90일 변화 조회 중 ({len(rec)}종목 × 2콜)...")
         rec = add_dilution(rec, sig_date, cfg["polygon_api_key"])
 
+    # 공매도 점검(yfinance): 숏비중·DTC → 숏스퀴즈 후보 플래그
+    if rc.get("short_check", True):
+        print(f"  [공매도점검] yfinance 공매도잔고 조회 중 ({len(rec)}종목)...")
+        rec = add_short_interest(rec)
+
     cols = ["signal_date", "ticker", "rank_score", "ratio", "dollar_surge_x", "avg_dollar_vol_10d_M",
             "dollar_volume_M", "latest_close", "candle_signal", "candle_pos",
-            "close_pos", "candle_score", "intraday_chg_%", "shares_chg_90d_%", "희석", "매수참고"]
+            "close_pos", "candle_score", "intraday_chg_%", "shares_chg_90d_%", "희석",
+            "short_%float", "days_to_cover", "숏스퀴즈", "매수참고"]
     cols = [c for c in cols if c in rec.columns]
     out = rec[cols]
 

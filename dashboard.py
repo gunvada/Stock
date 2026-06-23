@@ -109,21 +109,26 @@ def sec_picks():
         return "<h2>📌 오늘의 추천 픽</h2><p class='empty'>recommend_*.csv 없음</p>", None
     sig = re.search(r"recommend_(\d{4}-\d{2}-\d{2})", os.path.basename(p)).group(1)
     df = _read(p)
-    cols = ["ticker", "rank_score", "ratio", "dollar_surge_x", "avg_dollar_vol_10d_M",
-            "candle_signal", "close_pos", "shares_chg_90d_%", "희석", "매수참고"]
+    cols = ["ticker", "rank_score", "ratio", "candle_signal", "close_pos",
+            "shares_chg_90d_%", "희석", "short_%float", "숏스퀴즈", "매수참고"]
     cols = [c for c in cols if c in df.columns]
     headmap = {"ticker": "종목", "rank_score": "종합점수", "ratio": "거래량배율",
                "dollar_surge_x": "거래대금배율", "avg_dollar_vol_10d_M": "평균거래대금($M)",
                "candle_signal": "신호", "close_pos": "마감강도",
-               "shares_chg_90d_%": "주식수90일%", "희석": "희석점검", "매수참고": "매수참고($)"}
+               "shares_chg_90d_%": "주식수90일%", "희석": "희석점검",
+               "short_%float": "공매도%", "숏스퀴즈": "숏스퀴즈", "매수참고": "매수참고($)"}
     head = [headmap[c] for c in cols]
     def dilbadge(v):
         s = str(v)
         cls = {"희석위험": "sell2", "액면병합": "sell2", "희석진행": "sell1",
                "안정": "buy1"}.get(s, "neu")
         return f'<td><span class="badge {cls}">{html.escape(s)}</span></td>'
+    def sqbadge(v):
+        s = str(v)
+        cls = {"스퀴즈후보": "buy2", "숏높음": "buy1", "보통": "neu"}.get(s, "neu")
+        return f'<td><span class="badge {cls}">{html.escape(s)}</span></td>'
     fmts = {"candle_signal": lambda v: f"<td>{verdict_badge(v)}</td>",
-            "희석": dilbadge,
+            "희석": dilbadge, "숏스퀴즈": sqbadge,
             "shares_chg_90d_%": lambda v: signed_cell(v),
             "ticker": lambda v: f'<td class="tk">{html.escape(str(v))}</td>'}
     t = table(df, cols, head, fmts)
@@ -177,6 +182,39 @@ def ledger_block(path, title, date_col, entry_desc):
     fmts["ticker"] = lambda v: f'<td class="tk">{html.escape(str(v))}</td>'
     t = table(show, cols, [hmap[c] for c in cols], fmts)
     return f"<h3>{title}</h3><div class='cards'>{cards}</div>{t}"
+
+
+def sec_autotrade():
+    df = _read(os.path.join(OUT, "auto_trade_ledger.csv"))
+    if df.empty:
+        return ""
+    gross = int(df["pnl_gross_KRW"].sum())
+    net = int(df["pnl_net_KRW"].sum())
+    invested = int(df["notional_KRW"].sum())
+    days = df["trade_date"].nunique()
+    cards = (stat_card("누적 손익(net)", f"{net:+,}원", f"비용 2.5% 차감", "good" if net > 0 else "bad")
+             + stat_card("누적 손익(gross)", f"{gross:+,}원", "순수 진입→청산", "good" if gross > 0 else "bad")
+             + stat_card("평균 수익률", f"{df['net_%'].mean():+.1f}%", f"{days}일 · {len(df)}거래",
+                         "good" if df['net_%'].mean() > 0 else "bad")
+             + stat_card("총 투입", f"{invested:,}원", f"1·2등 각 100만"))
+    show = df.tail(12).iloc[::-1]
+    cols = ["trade_date", "rank", "ticker", "숏스퀴즈", "entry_KST1830", "exit_KST2229",
+            "ret_%", "net_%", "pnl_net_KRW"]
+    cols = [c for c in cols if c in df.columns]
+    hmap = {"trade_date": "매매일", "rank": "순위", "ticker": "종목", "숏스퀴즈": "숏스퀴즈",
+            "entry_KST1830": "진입(18:30)", "exit_KST2229": "청산(22:29)",
+            "ret_%": "수익%", "net_%": "순익%", "pnl_net_KRW": "손익(원,net)"}
+    def krw(v):
+        if pd.isna(v): return "<td></td>"
+        cls = "pos" if v > 0 else ("neg" if v < 0 else "zero")
+        return f'<td class="{cls}">{int(v):+,}</td>'
+    fmts = {c: signed_cell for c in ["ret_%", "net_%"] if c in df.columns}
+    fmts["pnl_net_KRW"] = krw
+    fmts["ticker"] = lambda v: f'<td class="tk">{html.escape(str(v))}</td>'
+    fmts["숏스퀴즈"] = lambda v: f'<td><span class="badge {"buy2" if str(v)=="스퀴즈후보" else ("buy1" if str(v)=="숏높음" else "neu")}">{html.escape(str(v))}</span></td>'
+    t = table(show, cols, [hmap[c] for c in cols], fmts)
+    return (f"<h2>🤖 프리마켓 자동매매 <span class='sub'>(KST 18:30 진입 → 22:29 청산 · 1·2등 각 100만원)</span></h2>"
+            f"<div class='cards'>{cards}</div>{t}")
 
 
 def sec_ledgers():
@@ -278,6 +316,7 @@ def main():
     picks_html, sig = sec_picks()
     body = "".join([
         picks_html,
+        sec_autotrade(),
         sec_premarket(),
         sec_ledgers(),
         sec_insights(),
