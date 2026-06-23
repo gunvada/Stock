@@ -43,6 +43,8 @@
     "top_n": 6,
     "ratio_weight": 1.0,
     "dilution_check": true,
+    "exclude_dilution": true,
+    "dilution_pool_mult": 3,
     "short_check": true
   },
 

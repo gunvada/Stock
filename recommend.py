@@ -53,6 +53,9 @@ def rec_config(cfg):
     rc.setdefault("ratio_weight", 1.0)
     # 희석 점검(Polygon 발행주식수 90일 변화) — 검증결과 펌프→페이드 구조원인. 픽당 2콜.
     rc.setdefault("dilution_check", True)
+    # 희석위험·액면병합 종목을 순위에서 제외(검증: 다음날 -20~-32%). 상위 풀에서 걸러 top_n 확보.
+    rc.setdefault("exclude_dilution", True)
+    rc.setdefault("dilution_pool_mult", 3)   # 점검할 상위 풀 = top_n × 이 배수
     # 공매도 점검(yfinance 숏비중·DTC) — 숏스퀴즈 후보 포착용.
     rc.setdefault("short_check", True)
     return rc
@@ -160,17 +163,31 @@ def produce(cfg):
     if "candle_score" in rec.columns:
         rec["rank_score"] = (rec["candle_score"]
                              + rc["ratio_weight"] * np.log10(rec["ratio"].clip(lower=1))).round(2)
-        rec = rec.sort_values("rank_score", ascending=False).head(rc["top_n"])
+        rec = rec.sort_values("rank_score", ascending=False)
     else:  # 구버전 surge CSV 폴백
-        rec = rec.sort_values("ratio", ascending=False).head(rc["top_n"])
+        rec = rec.sort_values("ratio", ascending=False)
 
     rec["매수참고"] = rec["latest_close"].round(3)
     rec["signal_date"] = sig_date
 
-    # 희석 점검(검증: 만성 희석/액면병합이 펌프→페이드의 구조원인) — 적신호 컬럼 부착
+    # 희석 점검(검증: 만성 희석/액면병합이 펌프→페이드의 구조원인)
     if rc.get("dilution_check"):
-        print(f"  [희석점검] Polygon 발행주식수 90일 변화 조회 중 ({len(rec)}종목 × 2콜)...")
-        rec = add_dilution(rec, sig_date, cfg["polygon_api_key"])
+        if rc.get("exclude_dilution", True):
+            # 위험종목 제외 → 상위 풀(top_n×배수)만 조회해 희석위험·액면병합 거르고 top_n 확보
+            pool = rec.head(rc["top_n"] * rc.get("dilution_pool_mult", 3))
+            print(f"  [희석점검] 상위 {len(pool)}종목 발행주식수 조회 → 위험종목 제외 후 상위 {rc['top_n']} 선정...")
+            pool = add_dilution(pool, sig_date, cfg["polygon_api_key"])
+            danger = pool["희석"].isin(["희석위험", "액면병합"])
+            excluded = pool[danger]["ticker"].tolist()
+            rec = pool[~danger].head(rc["top_n"])
+            if excluded:
+                print(f"    제외(희석/병합): {', '.join(excluded)}")
+        else:
+            rec = rec.head(rc["top_n"])
+            print(f"  [희석점검] Polygon 발행주식수 90일 변화 조회 중 ({len(rec)}종목 × 2콜)...")
+            rec = add_dilution(rec, sig_date, cfg["polygon_api_key"])
+    else:
+        rec = rec.head(rc["top_n"])
 
     # 공매도 점검(yfinance): 숏비중·DTC → 숏스퀴즈 후보 플래그
     if rc.get("short_check", True):
