@@ -1,0 +1,7 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+TNON,True,2,하락,"작은몸통양꼬리양봉@D-0, 양봉팽이군@D-0",작은몸통양꼬리양봉
+BIRD,True,2,횡보,"작은몸통양꼬리양봉@D-4, 위꼬리양봉@D-3",-
+SUGP,True,2,하락,"작은몸통양꼬리양봉@D-0, 꼬리군@D-1",작은몸통양꼬리양봉
+ECX,True,1,하락,작은몸통양꼬리양봉@D-4,-
+NFLW,True,1,하락,작은몸통양꼬리양봉@D-2,-
+CRMT,False,0,하락,-,-
