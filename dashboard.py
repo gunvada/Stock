@@ -1,147 +1,344 @@
 # -*- coding: utf-8 -*-
 """
-관리 대시보드 — 본장/프리마켓 트랙별 '최신 추천 + 누적 성적' 한눈 요약.
-읽기 전용(커밋된 output/*.csv만 읽음). API 키·네트워크 불필요.
+대시보드 생성기  (Static HTML Dashboard)
+=========================================
+모든 산출물(오늘 추천 픽·프리마켓 픽·누적 장부 성과·분석 인사이트·
+파이프라인 상태)을 단일 self-contained HTML 한 장으로 묶는다. 외부 의존성·
+서버 불필요 — output/dashboard.html 을 브라우저로 열면 끝.
 
-사용법:
-  python dashboard.py            # 두 트랙 모두
-  python dashboard.py regular    # 본장만
-  python dashboard.py premarket  # 프리마켓만
+데이터 소스(있는 것만 표시):
+  output/recommend_<신호일>.csv     최신 = 오늘의 추천 픽
+  output/premarket_<날짜>.csv       최신 = 프리마켓 갭상승 픽
+  output/recommend_ledger.csv       추천 픽 누적 모니터링(시초→종가)
+  output/premarket_ledger.csv       프리마켓 06:30→09:30 개장가 청산 누적
+  output/feature_analysis.csv       특성별 다음날 수익률 변별력
+  output/prior_runup_analysis.csv   직전상승률 코호트 성과
+  output/cache/grouped_*.json       백테스트 표본 규모
+
+사용법: python dashboard.py   → output/dashboard.html
 """
 import os
 import re
 import sys
 import glob
+import html
+import datetime as dt
 
 import pandas as pd
+
+import scanner
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
-DATED = re.compile(r"_(\d{4}-\d{2}-\d{2})\.csv$")
+OUT = scanner.OUTPUT_DIR
 
 
-def latest_dated(prefix):
-    fs = [f for f in glob.glob(os.path.join(OUT, f"{prefix}_*.csv"))
-          if DATED.search(os.path.basename(f))]
-    return sorted(fs)[-1] if fs else None
+# --------------------------------------------------------------------------- #
+# 헬퍼
+# --------------------------------------------------------------------------- #
+def _latest(prefix):
+    files = sorted(glob.glob(os.path.join(OUT, f"{prefix}_*.csv")))
+    files = [f for f in files
+             if re.search(rf"{prefix}_(\d{{4}}-\d{{2}}-\d{{2}})\.csv$", os.path.basename(f))]
+    return files[-1] if files else None
 
 
-def show_picks(path, none_msg):
-    if not path:
-        print(f"   {none_msg}")
-        return
-    d = pd.read_csv(path)
-    date = DATED.search(os.path.basename(path)).group(1)
-    print(f"   최신 픽 ({date}) — {len(d)}종목")
-    if not d.empty:
-        cols = [c for c in ["ticker", "gap_%", "vol_ratio", "dol_M", "dol_avg10_M", "dol_x",
-                            "매수참고", "손절", "익절목표"] if c in d.columns]
-        print("   " + d[cols].to_string(index=False).replace("\n", "\n   "))
+def _read(path):
+    try:
+        return pd.read_csv(path)
+    except Exception:
+        return pd.DataFrame()
 
 
-def show_candle_verified(path):
-    if not path:
-        print("   (교차검증 파일 없음 — candle_verify.py 실행 필요)")
-        return
-    d = pd.read_csv(path)
-    date = DATED.search(os.path.basename(path)).group(1)
-    if d.empty or "pass" not in d.columns:
-        print(f"   ({date}) 결과 없음")
-        return
-    passed = d[d["pass"] == True]
-    print(f"   ({date}) {len(d)}종목 중 통과 {len(passed)}종목"
-          + (f": {', '.join(passed['ticker'])}" if len(passed) else " (없음)"))
-    cols = [c for c in ["ticker", "pass", "trend", "n_signals", "recent_signals", "last_candle"] if c in d.columns]
-    print("   " + d[cols].to_string(index=False).replace("\n", "\n   "))
+def _fmt(v):
+    if pd.isna(v):
+        return ""
+    if isinstance(v, float):
+        return f"{v:,.2f}".rstrip("0").rstrip(".") if abs(v) < 1000 else f"{v:,.0f}"
+    return html.escape(str(v))
 
 
-def show_manual(path):
-    if not os.path.exists(path):
-        print("   (저널 없음)")
-        return
-    d = pd.read_csv(path)
-    if d.empty:
-        print("   (비어있음)")
-        return
-    cols = [c for c in ["trade_date", "ticker", "entry", "exit", "ret_%", "note"] if c in d.columns]
-    print("   " + d[cols].tail(8).to_string(index=False).replace("\n", "\n   "))
-    scored = pd.to_numeric(d.get("ret_%"), errors="coerce").dropna() if "ret_%" in d.columns else None
-    if scored is not None and len(scored):
-        print(f"   채점분 {len(scored)}건 | 평균 {scored.mean():+.2f}% | 승률 {(scored>0).mean()*100:.0f}%")
-    else:
-        print("   (아직 채점 전 — 매매일 데이터 대기)")
+def signed_cell(v):
+    """+면 초록, -면 빨강 색칠한 td."""
+    if pd.isna(v):
+        return "<td></td>"
+    cls = "pos" if v > 0 else ("neg" if v < 0 else "zero")
+    return f'<td class="{cls}">{v:+.1f}%</td>'
 
 
-def show_window(path):
-    if not os.path.exists(path):
-        print("   (장부 없음 — window_sim.py 실행 필요)")
-        return
-    d = pd.read_csv(path)
-    if d.empty or "ret_%" not in d.columns:
-        print("   (비어있음)")
-        return
-    r, n = d["ret_%"], len(d)
-    print(f"   누적 {n}거래 | gross 평균 {r.mean():+.2f}% | 승률 {(r>0).mean()*100:.0f}%"
-          + (f" | net평균 {d['net_%'].mean():+.2f}%" if "net_%" in d.columns else ""))
-    cols = [c for c in ["trade_date", "ticker", "entry_0530", "exit_0930", "ret_%"] if c in d.columns]
-    print("   최근 5거래:")
-    print("   " + d[cols].tail(5).to_string(index=False).replace("\n", "\n   "))
+def verdict_badge(v):
+    m = {"강한매수": "buy2", "매수관심": "buy1", "중립": "neu",
+         "매도주의": "sell1", "강한매도": "sell2"}
+    cls = m.get(str(v), "neu")
+    return f'<span class="badge {cls}">{html.escape(str(v))}</span>'
 
 
-def show_ledger(path):
-    if not os.path.exists(path):
-        print("   (장부 없음 — 아직 채점된 거래 없음)")
-        return
-    d = pd.read_csv(path)
-    if d.empty or "net_%" not in d.columns:
-        print("   (장부 비어있음)")
-        return
-    net, n = d["net_%"], len(d)
-    print(f"   누적 {n}거래 | 순익평균 {net.mean():+.2f}% | 승률 {(net>0).mean()*100:.0f}% "
-          f"| 익절 {d['tp_hit'].mean()*100:.0f}% · 손절 {d['stop_hit'].mean()*100:.0f}%")
-    cols = [c for c in ["date", "trade_date", "ticker", "net_%"] if c in d.columns]
-    print("   최근 5거래:")
-    print("   " + d[cols].tail(5).to_string(index=False).replace("\n", "\n   "))
+def table(df, cols, headers, fmts=None):
+    """DataFrame → HTML table. fmts: {col: callable(value)->td문자열}."""
+    if df.empty:
+        return '<p class="empty">데이터 없음</p>'
+    fmts = fmts or {}
+    th = "".join(f"<th>{html.escape(h)}</th>" for h in headers)
+    trs = []
+    for _, r in df.iterrows():
+        tds = []
+        for c in cols:
+            if c in fmts:
+                tds.append(fmts[c](r.get(c)))
+            else:
+                tds.append(f"<td>{_fmt(r.get(c))}</td>")
+        trs.append("<tr>" + "".join(tds) + "</tr>")
+    return f'<table><thead><tr>{th}</tr></thead><tbody>{"".join(trs)}</tbody></table>'
 
 
-def regular():
-    print("=" * 72)
-    print("  [본장 트랙] 눌림목(흡수) 반등 · 종가청산 · 회원시간 밖")
-    print("=" * 72)
-    print(" ▶ 추천종목 (pullback)")
-    show_picks(latest_dated("pullback"), "(본장 최신 픽 파일 없음 — daily.yml 실행 필요)")
-    print(" ▶ 캔들-베이스 교차검증 통과 (후보 축소)")
-    show_candle_verified(latest_dated("candle_verified"))
-    print(" ▶ 누적 성적 (verification_ledger · 종가청산)")
-    show_ledger(os.path.join(OUT, "verification_ledger.csv"))
-    print(" ▶ 윈도우 시뮬 (KST 18:30매수→22:30개장매도 · Top5)")
-    show_window(os.path.join(OUT, "window_sim_ledger.csv"))
-    print(" ▶ 실매매 저널 (raw, 룰없음)")
-    show_manual(os.path.join(OUT, "manual_trades.csv"))
+def stat_card(label, value, sub="", tone="neutral"):
+    return (f'<div class="card {tone}"><div class="card-val">{value}</div>'
+            f'<div class="card-lbl">{html.escape(label)}</div>'
+            f'<div class="card-sub">{html.escape(sub)}</div></div>')
 
 
-def premarket():
-    print("=" * 72)
-    print("  [프리마켓 트랙] 갭상승+활동량 모멘텀 · KST 18:30–22:00")
-    print("=" * 72)
-    print(" ▶ 추천종목 (premarket)")
-    show_picks(latest_dated("premarket"), "(프리마켓 최신 픽 파일 없음 — premarket.yml 실행 필요)")
-    print(" ▶ 누적 성적 (premarket_ledger)")
-    show_ledger(os.path.join(OUT, "premarket_ledger.csv"))
+# --------------------------------------------------------------------------- #
+# 섹션 빌더
+# --------------------------------------------------------------------------- #
+def sec_picks():
+    p = _latest("recommend")
+    if not p:
+        return "<h2>📌 오늘의 추천 픽</h2><p class='empty'>recommend_*.csv 없음</p>", None
+    sig = re.search(r"recommend_(\d{4}-\d{2}-\d{2})", os.path.basename(p)).group(1)
+    df = _read(p)
+    cols = ["ticker", "rank_score", "ratio", "candle_signal", "close_pos",
+            "shares_chg_90d_%", "희석", "short_%float", "숏스퀴즈", "매수참고"]
+    cols = [c for c in cols if c in df.columns]
+    headmap = {"ticker": "종목", "rank_score": "종합점수", "ratio": "거래량배율",
+               "dollar_surge_x": "거래대금배율", "avg_dollar_vol_10d_M": "평균거래대금($M)",
+               "candle_signal": "신호", "close_pos": "마감강도",
+               "shares_chg_90d_%": "주식수90일%", "희석": "희석점검",
+               "short_%float": "공매도%", "숏스퀴즈": "숏스퀴즈", "매수참고": "매수참고($)"}
+    head = [headmap[c] for c in cols]
+    def dilbadge(v):
+        s = str(v)
+        cls = {"희석위험": "sell2", "액면병합": "sell2", "희석진행": "sell1",
+               "안정": "buy1"}.get(s, "neu")
+        return f'<td><span class="badge {cls}">{html.escape(s)}</span></td>'
+    def sqbadge(v):
+        s = str(v)
+        cls = {"스퀴즈후보": "buy2", "숏높음": "buy1", "보통": "neu"}.get(s, "neu")
+        return f'<td><span class="badge {cls}">{html.escape(s)}</span></td>'
+    fmts = {"candle_signal": lambda v: f"<td>{verdict_badge(v)}</td>",
+            "희석": dilbadge, "숏스퀴즈": sqbadge,
+            "shares_chg_90d_%": lambda v: signed_cell(v),
+            "ticker": lambda v: f'<td class="tk">{html.escape(str(v))}</td>'}
+    t = table(df, cols, head, fmts)
+    h = (f"<h2>📌 오늘의 추천 픽 <span class='sub'>(신호일 {sig} → 다음 거래일 매매)</span></h2>"
+         f"<p class='note'>순번 = candle_score(형태+위치×1.5+마감강도) + log₁₀(거래량배율)</p>{t}")
+    return h, sig
+
+
+def sec_premarket():
+    p = _latest("premarket")
+    if not p:
+        return "<h2>🌅 프리마켓 픽</h2><p class='empty'>premarket_*.csv 없음</p>"
+    d = re.search(r"premarket_(\d{4}-\d{2}-\d{2})", os.path.basename(p)).group(1)
+    df = _read(p)
+    cols = [c for c in ["ticker", "candle_signal", "prior_close", "pm_price", "gap_%",
+                        "pm_bars", "매수참고"] if c in df.columns]
+    head = {"ticker": "종목", "candle_signal": "신호", "prior_close": "전일종가",
+            "pm_price": "프리마켓가", "gap_%": "갭%", "pm_bars": "활동분봉", "매수참고": "매수참고"}
+    fmts = {"candle_signal": lambda v: f"<td>{verdict_badge(v)}</td>",
+            "gap_%": lambda v: signed_cell(v),
+            "ticker": lambda v: f'<td class="tk">{html.escape(str(v))}</td>'}
+    t = table(df, cols, [head[c] for c in cols], fmts)
+    return (f"<h2>🌅 프리마켓 픽 <span class='sub'>({d} · ET 05:30–09:00)</span></h2>"
+            f"<p class='note'>★ 권장 진입 06:30 ET (KST 19:30) · 09:30 개장가 청산</p>{t}")
+
+
+def ledger_block(path, title, date_col, entry_desc):
+    df = _read(path)
+    if df.empty:
+        return f"<h3>{title}</h3><p class='empty'>장부 없음</p>"
+    n = len(df)
+    avg = df["net_%"].mean()
+    win = (df["net_%"] > 0).mean() * 100
+    hi = df["hi_%"].mean() if "hi_%" in df.columns else float("nan")
+    tone = "good" if avg > 0 else "bad"
+    cards = (stat_card("순익 평균/거래", f"{avg:+.1f}%", entry_desc, tone)
+             + stat_card("상승 비율", f"{win:.0f}%", f"{(df['net_%']>0).sum()}/{n}",
+                         "good" if win >= 50 else "neutral")
+             + stat_card("장중 최고 평균", f"{hi:+.1f}%" if pd.notna(hi) else "—", "도달 기준")
+             + stat_card("누적 거래수", f"{n}", "표본"))
+    # 최근 거래 표
+    show = df.tail(12).iloc[::-1]
+    cols = [date_col, "ticker", "candle_signal"]
+    cols += [c for c in ["entry_px", "exit_px", "open", "close"] if c in df.columns]
+    cols += [c for c in ["oc_%", "hi_%", "lo_%", "net_%"] if c in df.columns]
+    hmap = {date_col: "날짜", "ticker": "종목", "candle_signal": "신호",
+            "entry_px": "진입", "exit_px": "청산", "open": "시초", "close": "종가",
+            "oc_%": "수익%", "hi_%": "최고%", "lo_%": "최저%", "net_%": "순익%"}
+    fmts = {c: signed_cell for c in ["oc_%", "hi_%", "lo_%", "net_%"] if c in df.columns}
+    fmts["candle_signal"] = lambda v: f"<td>{verdict_badge(v)}</td>"
+    fmts["ticker"] = lambda v: f'<td class="tk">{html.escape(str(v))}</td>'
+    t = table(show, cols, [hmap[c] for c in cols], fmts)
+    return f"<h3>{title}</h3><div class='cards'>{cards}</div>{t}"
+
+
+def sec_autotrade():
+    df = _read(os.path.join(OUT, "auto_trade_ledger.csv"))
+    if df.empty:
+        return ""
+    gross = int(df["pnl_gross_KRW"].sum())
+    net = int(df["pnl_net_KRW"].sum())
+    invested = int(df["notional_KRW"].sum())
+    days = df["trade_date"].nunique()
+    cards = (stat_card("누적 손익(net)", f"{net:+,}원", f"비용 2.5% 차감", "good" if net > 0 else "bad")
+             + stat_card("누적 손익(gross)", f"{gross:+,}원", "순수 진입→청산", "good" if gross > 0 else "bad")
+             + stat_card("평균 수익률", f"{df['net_%'].mean():+.1f}%", f"{days}일 · {len(df)}거래",
+                         "good" if df['net_%'].mean() > 0 else "bad")
+             + stat_card("총 투입", f"{invested:,}원", f"1·2등 각 100만"))
+    show = df.tail(12).iloc[::-1]
+    cols = ["trade_date", "rank", "ticker", "숏스퀴즈", "entry_KST1830", "exit_KST2229",
+            "ret_%", "net_%", "pnl_net_KRW"]
+    cols = [c for c in cols if c in df.columns]
+    hmap = {"trade_date": "매매일", "rank": "순위", "ticker": "종목", "숏스퀴즈": "숏스퀴즈",
+            "entry_KST1830": "진입(18:30)", "exit_KST2229": "청산(22:29)",
+            "ret_%": "수익%", "net_%": "순익%", "pnl_net_KRW": "손익(원,net)"}
+    def krw(v):
+        if pd.isna(v): return "<td></td>"
+        cls = "pos" if v > 0 else ("neg" if v < 0 else "zero")
+        return f'<td class="{cls}">{int(v):+,}</td>'
+    fmts = {c: signed_cell for c in ["ret_%", "net_%"] if c in df.columns}
+    fmts["pnl_net_KRW"] = krw
+    fmts["ticker"] = lambda v: f'<td class="tk">{html.escape(str(v))}</td>'
+    fmts["숏스퀴즈"] = lambda v: f'<td><span class="badge {"buy2" if str(v)=="스퀴즈후보" else ("buy1" if str(v)=="숏높음" else "neu")}">{html.escape(str(v))}</span></td>'
+    t = table(show, cols, [hmap[c] for c in cols], fmts)
+    return (f"<h2>🤖 프리마켓 자동매매 <span class='sub'>(KST 18:30 진입 → 22:29 청산 · 1·2등 각 100만원)</span></h2>"
+            f"<div class='cards'>{cards}</div>{t}")
+
+
+def sec_ledgers():
+    rec = ledger_block(os.path.join(OUT, "recommend_ledger.csv"),
+                       "추천 픽 (시초→종가 모니터링)", "trade_date", "당일 시초→종가")
+    pm = ledger_block(os.path.join(OUT, "premarket_ledger.csv"),
+                      "프리마켓 (06:30→09:30 개장가)", "date", "06:30 진입→09:30 청산")
+    return f"<h2>📊 누적 성과</h2>{rec}{pm}"
+
+
+def sec_insights():
+    out = ["<h2>🔬 분석 인사이트 <span class='sub'>(283거래일 / 6,420건 / 2,082종목 기준)</span></h2>"]
+    out.append("<h3>대표본 재검증 — 단일 특성 엣지는 대부분 노이즈였다</h3>")
+    out.append("<ul class='ins'>"
+               "<li><b>기초 성과</b>: 폭증주 다음날 시초→종가 평균 <b>−2.9%</b>·승률 30% — 평균적으론 손실. "
+               "엣지는 단일 지표가 아니라 캔들신호+상위픽 집중에서 찾아야 함.</li>"
+               "<li><b>직전 100%+ ≠ 불리</b>: 100%+ vs 미만 차이 +0.6%p(t≈0.5, 무의미). "
+               "작은 표본의 '모멘텀 우위'는 노이즈였음.</li>"
+               "<li><b>단, 200%+ 극단급등은 명확히 최악</b>(순익 −6.1%, n=210) — 과열 상한선의 근거.</li>"
+               "<li><b>그나마 일관된 약한 신호</b>: ①갭하락 후보 최악(−4.0%) ②고가($11대) 승률 20%로 저조 "
+               "→ 갭 하한·가격 상한이 약하게 지지됨(상관은 여전히 ~0).</li>"
+               "</ul>")
+    pr = _read(os.path.join(OUT, "prior_runup_analysis.csv"))
+    if not pr.empty and "prior7_%" in pr.columns:
+        base = pr["fwd_oc_net_%"]
+        ext = pr[pr["prior7_%"] >= 200]["fwd_oc_net_%"]
+        cards = (stat_card("폭증주 기초 순익", f"{base.mean():+.1f}%", f"n={len(base)} · 승률{(base>0).mean()*100:.0f}%", "bad")
+                 + stat_card("200%+ 급등군 순익", f"{ext.mean():+.1f}%" if len(ext) else "—",
+                             f"n={len(ext)} · 과열 상한 근거", "bad")
+                 + stat_card("분석 종목수", f"{pr['ticker'].nunique():,}", "breadth"))
+        out.append(f"<div class='cards'>{cards}</div>")
+
+    # 전략 검증 종합 — 기계적 엣지 부재 → 재량적 워치리스트로 확정
+    out.append("<h3>전략 검증 종합 — 기계적 엣지는 없다 (∴ 재량 워치리스트)</h3>")
+    out.append("<table><thead><tr><th>청산 전략</th><th>순익/거래</th><th>판정</th></tr></thead><tbody>"
+               "<tr><td class='tk'>다음날 시초→종가</td><td class='neg'>−2.9%</td><td>엣지 없음</td></tr>"
+               "<tr><td class='tk'>프리마켓 06:30→09:30 개장가</td><td class='neg'>−1.1%</td><td>엣지 없음</td></tr>"
+               "<tr><td class='tk'>프리마켓 +8% TP</td><td class='neg'>−0.2%</td><td>break-even</td></tr>"
+               "<tr><td class='tk'>프리마켓 TP10/STOP10</td><td class='neg'>−0.6%</td><td>엣지 없음</td></tr>"
+               "<tr><td class='tk'>캔들신호·종합점수 변별력</td><td class='zero'>~0</td><td>모든 변형서 무력</td></tr>"
+               "</tbody></table>")
+    out.append("<ul class='ins'>"
+               "<li>종목들은 장중 +9~14% 솟구치나(펌프) 타이밍이 규칙으로 안 잡히고, 왕복 2.5% 비용이 저가주에 큰 허들.</li>"
+               "<li><b>∴ 이 도구는 '매매 신호'가 아니라 장 전에 주목 종목을 좁혀주는 <span style='color:#5b9dff'>재량적 워치리스트</span>다.</b> "
+               "픽은 회원님의 눈·뉴스·호가로 직접 판단할 후보이며, 장부는 자동 수익이 아닌 학습·기록용.</li>"
+               "</ul>")
+    return "".join(out)
+
+
+def sec_status(sig_date):
+    grouped = glob.glob(os.path.join(OUT, "cache", "grouped_*.json"))
+    dates = sorted(re.search(r"grouped_(\d{4}-\d{2}-\d{2})", os.path.basename(p)).group(1)
+                   for p in grouped if re.search(r"grouped_\d{4}-\d{2}-\d{2}", p))
+    span = f"{dates[0]} ~ {dates[-1]}" if dates else "—"
+    surge = _latest("surge")
+    last_scan = re.search(r"surge_(\d{4}-\d{2}-\d{2})", os.path.basename(surge)).group(1) if surge else "—"
+    cards = (stat_card("최근 스캔 신호일", last_scan, "surge CSV 기준")
+             + stat_card("백테스트 캐시", f"{len(dates)}거래일", span)
+             + stat_card("오늘 추천 신호일", sig_date or "—", "recommend CSV"))
+    return f"<h2>⚙️ 파이프라인 상태</h2><div class='cards'>{cards}</div>"
+
+
+CSS = """
+*{box-sizing:border-box}body{margin:0;font-family:'Segoe UI',-apple-system,'Malgun Gothic',sans-serif;
+background:#0f1420;color:#e6e9ef;line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding:24px}
+header{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #2a3550;padding-bottom:12px;margin-bottom:8px;flex-wrap:wrap;gap:8px}
+h1{font-size:22px;margin:0}h1 .em{color:#5b9dff}
+.ts{color:#8a93a6;font-size:13px}
+h2{font-size:18px;margin:28px 0 8px;color:#cdd6e8}
+h2 .sub{font-size:13px;color:#8a93a6;font-weight:normal}
+h3{font-size:15px;margin:18px 0 8px;color:#aebbd6}
+.note{color:#8a93a6;font-size:12px;margin:0 0 8px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0 4px;background:#161d2e;border-radius:8px;overflow:hidden}
+th{background:#1f2940;color:#9fb0d0;text-align:right;padding:8px 10px;font-weight:600}
+th:first-child,td:first-child{text-align:left}
+td{padding:7px 10px;text-align:right;border-top:1px solid #222c44}
+td.tk{font-weight:700;color:#fff}
+td.pos{color:#3ddc84;font-weight:600}td.neg{color:#ff6b6b;font-weight:600}td.zero{color:#8a93a6}
+.badge{padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
+.badge.buy2{background:#0f5132;color:#3ddc84}.badge.buy1{background:#1c3a2e;color:#7fe0a8}
+.badge.neu{background:#33384a;color:#aab}.badge.sell1{background:#4a2a1c;color:#ffb088}
+.badge.sell2{background:#5c1e1e;color:#ff8080}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:8px 0}
+.card{background:#161d2e;border:1px solid #222c44;border-radius:10px;padding:14px;text-align:center}
+.card.good{border-color:#1f6b43}.card.bad{border-color:#7a2e2e}
+.card-val{font-size:24px;font-weight:800}
+.card.good .card-val{color:#3ddc84}.card.bad .card-val{color:#ff6b6b}
+.card-lbl{font-size:12px;color:#aebbd6;margin-top:4px}.card-sub{font-size:11px;color:#8a93a6}
+.empty{color:#8a93a6;font-style:italic;padding:8px 0}
+ul.ins{font-size:13px;color:#cdd6e8;padding-left:18px}ul.ins li{margin:4px 0}
+footer{margin-top:32px;color:#6b7488;font-size:11px;border-top:1px solid #222c44;padding-top:12px}
+"""
 
 
 def main():
-    which = sys.argv[1].lower() if len(sys.argv) > 1 else "all"
-    if which in ("regular", "본장", "all"):
-        regular()
-    if which in ("premarket", "프리마켓", "all"):
-        if which == "all":
-            print()
-        premarket()
+    os.makedirs(OUT, exist_ok=True)
+    now = dt.datetime.now()
+    picks_html, sig = sec_picks()
+    body = "".join([
+        picks_html,
+        sec_autotrade(),
+        sec_premarket(),
+        sec_ledgers(),
+        sec_insights(),
+        sec_status(sig),
+    ])
+    doc = f"""<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>볼륨서지 스캐너 대시보드</title><style>{CSS}</style></head>
+<body><div class="wrap">
+<header><h1>📈 <span class="em">볼륨서지</span> 재량 워치리스트</h1>
+<span class="ts">생성 {now:%Y-%m-%d %H:%M}</span></header>
+{body}
+<footer>※ 본 도구는 <b>매매 신호가 아닌 재량적 워치리스트</b>입니다 — 283일 백테스트 결과
+기계적 진입/청산 규칙에는 검증된 엣지가 없었습니다(전략 검증 종합 참조). 픽은 장 전에 주목할
+'후보'이며, 최종 판단은 본인 몫입니다. 변동성 극심 — 소액·리스크 관리 필수.</footer>
+</div></body></html>"""
+
+    path = os.path.join(OUT, "dashboard.html")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(doc)
+    print(f"[완료] 대시보드 생성: {path}")
+    print(f"  → 브라우저로 열기: file://{path}")
 
 
 if __name__ == "__main__":

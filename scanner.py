@@ -40,21 +40,30 @@ FINNHUB_QUOTE = "https://finnhub.io/api/v1/quote"
 # 설정 로드
 # --------------------------------------------------------------------------- #
 def load_config():
-    if not os.path.exists(CONFIG_PATH):
+    # CI/cron 등에서는 config.json 없이 환경변수(POLYGON_API_KEY)만으로 동작.
+    # config.example.json 을 기본 골격으로 사용(스캔/추천 기본값 채움).
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+    elif os.environ.get("POLYGON_API_KEY"):
+        example = os.path.join(BASE_DIR, "config.example.json")
+        cfg = {}
+        if os.path.exists(example):
+            with open(example, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+    else:
         sys.exit(
-            "[오류] config.json 이 없습니다.\n"
-            "       config.example.json 을 config.json 으로 복사하고 "
-            "Polygon API 키를 채워주세요."
+            "[오류] config.json 이 없고 POLYGON_API_KEY 환경변수도 없습니다.\n"
+            "       config.example.json 을 config.json 으로 복사해 키를 채우거나, "
+            "POLYGON_API_KEY 환경변수를 설정하세요."
         )
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        cfg = json.load(f)
 
-    # 환경변수가 있으면 우선 적용 (키를 파일에 두기 싫을 때)
+    # 환경변수가 있으면 우선 적용 (키를 파일에 두기 싫을 때 / CI 시크릿)
     cfg["polygon_api_key"] = os.environ.get("POLYGON_API_KEY", cfg.get("polygon_api_key", "")).strip()
     cfg["finnhub_api_key"] = os.environ.get("FINNHUB_API_KEY", cfg.get("finnhub_api_key", "")).strip()
 
     if not cfg["polygon_api_key"] or "여기에" in cfg["polygon_api_key"]:
-        sys.exit("[오류] config.json 의 polygon_api_key 가 비어 있습니다.")
+        sys.exit("[오류] polygon_api_key 가 비어 있습니다(config.json 또는 POLYGON_API_KEY).")
     return cfg
 
 
@@ -92,8 +101,12 @@ def fetch_grouped_day(date_str, api_key, session, rate_sleep):
 
 
 def collect_recent_days(cfg, session):
-    """최근 거래일 N일치 데이터를 모은다. (주말/휴장일은 자동으로 빈 응답)"""
-    n_days = cfg["scan"]["lookback_trading_days"]
+    """최근 거래일 N일치 데이터를 모은다. (주말/휴장일은 자동으로 빈 응답)
+    거래량 폭증(lookback) + 평균거래대금(dollar_baseline_days) 둘 다 커버하도록
+    충분히 수집한다."""
+    lookback = cfg["scan"]["lookback_trading_days"]
+    dol_days = cfg["scan"].get("dollar_baseline_days", 10)
+    n_days = max(lookback, dol_days + 1)   # 평균거래대금 10일치엔 직전 10거래일 필요
     api_key = cfg["polygon_api_key"]
 
     # 무료 티어는 5호출/분 → 호출당 ~13초. 유료면 config로 조정 가능.
@@ -150,9 +163,18 @@ def build_dataframe(collected):
 
 
 def compute_surge(df, cfg):
+    import candle_signals  # 일봉 캔들 신호 필터 (파동연상/캔들개론 기반)
+
     sc = cfg["scan"]
     method = sc.get("baseline_method", "median")
+    lookback = sc.get("lookback_trading_days", 7)
+    dol_days = sc.get("dollar_baseline_days", 10)
     latest_date = df["date"].max()
+
+    # 캔들 신호 필터 설정 (없어도 동작 — 기본은 주석만, 필터 미적용)
+    cf = sc.get("candle_filter", {})
+    cf_lookback = cf.get("lookback", lookback)
+    cf_require = cf.get("require_verdicts", [])  # 예: ["강한매수","매수관심"] 면 그 외 제외
 
     out = []
     for ticker, g in df.groupby("ticker"):
@@ -165,8 +187,9 @@ def compute_surge(df, cfg):
         if len(prior) < 2:
             continue  # 비교 기준 부족
 
-        prior_vols = prior["volume"].tolist()
-        baseline = median(prior_vols) if method == "median" else (sum(prior_vols) / len(prior_vols))
+        # 거래량 폭증 배율: 직전 (lookback-1)거래일 거래량 기준 (수집량 늘려도 동일 유지)
+        vol_prior = prior.tail(max(2, lookback - 1))["volume"].tolist()
+        baseline = median(vol_prior) if method == "median" else (sum(vol_prior) / len(vol_prior))
         if baseline <= 0:
             continue
 
@@ -174,6 +197,17 @@ def compute_surge(df, cfg):
         latest_close = float(latest["close"])
         ratio = latest_vol / baseline
         dollar_vol = latest_vol * latest_close
+
+        # 신호일 갭(전일종가 대비 시초): 특성분석상 갭하락 후보가 다음날 최악(-4.7%).
+        prev_close = float(prior.iloc[-1]["close"])
+        signal_gap = ((float(latest["open"]) - prev_close) / prev_close * 100
+                      if prev_close > 0 and latest["open"] else 0.0)
+
+        # 평균 거래대금(직전 dol_days 거래일) + 거래대금 폭증 배율
+        dprior = prior.tail(dol_days)
+        d_series = (dprior["volume"] * dprior["close"])
+        avg_dollar_vol = float(d_series.mean()) if len(dprior) else 0.0
+        dollar_surge_x = (dollar_vol / avg_dollar_vol) if avg_dollar_vol > 0 else 0.0
 
         # 가격대 필터 (소형주/페니주)
         if not (sc["price_min"] <= latest_close <= sc["price_max"]):
@@ -185,10 +219,20 @@ def compute_surge(df, cfg):
             continue
         if dollar_vol < sc["min_latest_dollar_volume"]:
             continue
+        # 갭 하한 필터(옵션): min_signal_gap_pct 가 설정되면 신호일 갭하락/약갭 후보 제외.
+        # 기본 None(미적용). 특성분석(feature_analysis) 근거 — 갭상승 코호트 승률 우위.
+        min_gap = sc.get("min_signal_gap_pct", None)
+        if min_gap is not None and signal_gap < min_gap:
+            continue
 
         day_change = 0.0
         if latest["open"]:
             day_change = (latest_close - latest["open"]) / latest["open"] * 100
+
+        # 캔들 신호 평가 (최신봉 형태 + 하이로우 기준선상 위치)
+        sig = candle_signals.evaluate(g, lookback=cf_lookback)
+        if cf_require and sig["verdict"] not in cf_require:
+            continue  # 요구 판정에 미달 → 후보에서 제외
 
         out.append(
             {
@@ -198,7 +242,15 @@ def compute_surge(df, cfg):
                 "latest_volume": int(latest_vol),
                 "baseline_volume": int(baseline),
                 "dollar_volume_M": round(dollar_vol / 1e6, 2),
+                "avg_dollar_vol_10d_M": round(avg_dollar_vol / 1e6, 2),
+                "dollar_surge_x": round(dollar_surge_x, 1),
+                "signal_gap_%": round(signal_gap, 1),
                 "intraday_chg_%": round(day_change, 1),
+                "candle_signal": sig["verdict"],
+                "candle_shape": sig["shape"],
+                "candle_pos": sig["position"],
+                "close_pos": sig["close_pos"],
+                "candle_score": sig["score"],
                 "latest_date": latest_date,
             }
         )
@@ -317,8 +369,9 @@ def main():
     print(f"  {sc['watch_threshold']:.0f}~{sc['volume_surge_threshold']:.0f}배 관찰: {len(watch)} 종목")
     print("-" * 70)
 
-    show_cols = ["ticker", "ratio", "latest_close", "latest_volume",
-                 "baseline_volume", "dollar_volume_M", "intraday_chg_%"]
+    show_cols = ["ticker", "ratio", "latest_close", "dollar_volume_M",
+                 "avg_dollar_vol_10d_M", "dollar_surge_x", "intraday_chg_%",
+                 "candle_signal", "candle_pos", "close_pos"]
     if "live_price" in res_top.columns:
         show_cols += ["live_price", "live_chg_%"]
 

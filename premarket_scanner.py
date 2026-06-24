@@ -38,7 +38,7 @@ PM_START, PM_END = "05:30", "09:00"
 def pm_config(cfg):
     """config.json['premarket'] 기본값 채우기 (섹션 없어도 동작)."""
     pm = cfg.setdefault("premarket", {})
-    pm.setdefault("universe_top_n", 40)      # 본장 후보 중 상위 N개만 평가
+    pm.setdefault("universe_top_n", 6)       # 본장 후보 중 상위 N개만 평가(엣지가 상위에 집중)
     pm.setdefault("gap_min_pct", 5.0)        # 전일종가 대비 최소 갭상승 %
     # 야후는 프리마켓 '거래량'을 제공하지 않으므로(1분봉 Volume=0),
     # 프리마켓 1분봉 '개수'를 활동량(유동성) 프록시로 사용한다. 정밀 거래량은 유료 필요.
@@ -47,11 +47,18 @@ def pm_config(cfg):
     pm.setdefault("price_max", 20.0)
     pm.setdefault("tp_pct", 10.0)
     pm.setdefault("stop_pct", 8.0)
+    pm.setdefault("performance_lookback_days", 60)  # 성과 관리 집계 창(달력일)
+    # 캔들 신호 부합 종목만 추천 픽으로 (surge CSV의 candle_signal 기준).
+    # 빈 리스트면 필터 미적용(전 후보). 컬럼 없으면 자동 통과.
+    pm.setdefault("require_verdicts", ["강한매수", "매수관심"])
+    # 타이밍 스터디(20거래일, 06:30 ET 진입이 +3.0%/거래로 최적)로 확정한 권장 진입 시각.
+    pm.setdefault("entry_time_et", "06:30")   # KST 19:30
     return pm
 
 
-def load_universe(top_n):
-    """가장 최근 본장 산출물에서 (ticker, prior_close, signal_date) 유니버스 구성."""
+def load_universe(top_n, require_verdicts=None):
+    """가장 최근 본장 산출물에서 (ticker, prior_close, signal_date) 유니버스 구성.
+    require_verdicts 가 주어지고 surge CSV에 candle_signal 컬럼이 있으면 신호 부합 종목만."""
     files = sorted(glob.glob(os.path.join(scanner.OUTPUT_DIR, "surge_*.csv")) +
                    glob.glob(os.path.join(scanner.OUTPUT_DIR, "pullback_*.csv")))
     # 날짜형 파일만 (pullback_backtest_*.csv 등 제외)
@@ -65,11 +72,39 @@ def load_universe(top_n):
     df = pd.read_csv(src)
     # surge: ticker,ratio,latest_close / pullback: ticker,c
     close_col = "latest_close" if "latest_close" in df.columns else "c"
-    rank_col = "ratio" if "ratio" in df.columns else ("vol_ratio" if "vol_ratio" in df.columns else None)
-    if rank_col:
-        df = df.sort_values(rank_col, ascending=False)
-    uni = df[["ticker", close_col]].head(top_n).rename(columns={close_col: "prior_close"})
-    print(f"[1/3] 유니버스: {os.path.basename(src)} 상위 {len(uni)}개 (신호일 {sig_date})")
+
+    # Polygon 테스트 심볼 제외(recommend.py 와 동일)
+    TEST_TICKERS = {"ZVZZT", "ZWZZT", "ZXYZ.A", "ZBZX", "ZJZZT", "ZTST", "ZXZZT", "ZVV"}
+    df = df[~df["ticker"].isin(TEST_TICKERS)]
+
+    # 캔들 신호 필터 (컬럼 존재 시에만)
+    note = ""
+    if require_verdicts and "candle_signal" in df.columns:
+        before = len(df)
+        df = df[df["candle_signal"].isin(require_verdicts)]
+        note = f" · 캔들신호 {require_verdicts} 부합 {len(df)}/{before}"
+    elif require_verdicts:
+        note = " · (candle_signal 컬럼 없음 → 신호필터 미적용)"
+
+    # 정렬: recommend.py 와 동일한 '종합점수'(마감강도+신호형태+추세위치+폭증배율)로 통일.
+    # candle_score 가 있으면 rank_score = candle_score + log10(ratio), 없으면 ratio 폴백.
+    import numpy as np
+    if "candle_score" in df.columns and "ratio" in df.columns:
+        df = df.copy()
+        df["rank_score"] = (df["candle_score"]
+                            + np.log10(df["ratio"].clip(lower=1))).round(2)
+        df = df.sort_values("rank_score", ascending=False)
+        note += " · 정렬=종합점수"
+    else:
+        rank_col = "ratio" if "ratio" in df.columns else ("vol_ratio" if "vol_ratio" in df.columns else None)
+        if rank_col:
+            df = df.sort_values(rank_col, ascending=False)
+
+    keep_cols = ["ticker", close_col]
+    if "candle_signal" in df.columns:
+        keep_cols.append("candle_signal")
+    uni = df[keep_cols].head(top_n).rename(columns={close_col: "prior_close"})
+    print(f"[1/3] 유니버스: {os.path.basename(src)} 상위 {len(uni)}개 (신호일 {sig_date}){note}")
     return uni, sig_date, src
 
 
@@ -103,7 +138,7 @@ def main():
     pm = pm_config(cfg)
     arg_date = sys.argv[1] if len(sys.argv) > 1 else None
 
-    uni, sig_date, _ = load_universe(pm["universe_top_n"])
+    uni, sig_date, _ = load_universe(pm["universe_top_n"], pm.get("require_verdicts"))
     # 평가 대상일: 인자 우선, 없으면 '신호일 다음 거래일'(주말 건너뜀)
     if arg_date:
         target = arg_date
@@ -119,6 +154,7 @@ def main():
 
     rows = []
     pc_map = dict(zip(uni["ticker"], uni["prior_close"]))
+    cs_map = dict(zip(uni["ticker"], uni["candle_signal"])) if "candle_signal" in uni.columns else {}
     for t, f in frames.items():
         prior_close = float(pc_map.get(t, 0) or 0)
         if prior_close <= 0:
@@ -136,6 +172,7 @@ def main():
             continue
         rows.append({
             "ticker": t,
+            "candle_signal": cs_map.get(t, ""),
             "prior_close": round(prior_close, 3),
             "pm_price": round(pm_last, 3),
             "gap_%": round(gap, 1),
@@ -154,6 +191,7 @@ def main():
     print(f"  프리마켓 갭상승+거래량 모멘텀  —  {target} (창 KST 18:30–22:00 / ET 05:30–09:00)")
     print(f"  필터: 갭 ≥{pm['gap_min_pct']:.0f}% · 프리마켓활동 ≥{pm['min_pm_bars']}분봉 · "
           f"${pm['price_min']}~{pm['price_max']}")
+    print(f"  ★ 권장 진입: {pm['entry_time_et']} ET (KST 19:30) — 타이밍 스터디 확정 최적 타점")
     print("=" * 80)
     if out.empty:
         print("  조건 충족 종목 없음. (해당일 프리마켓 갭상승 모멘텀 없음 — 정상)")
