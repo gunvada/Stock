@@ -39,21 +39,30 @@ FINNHUB_QUOTE = "https://finnhub.io/api/v1/quote"
 # 설정 로드
 # --------------------------------------------------------------------------- #
 def load_config():
-    if not os.path.exists(CONFIG_PATH):
+    # CI/cron 등에서는 config.json 없이 환경변수(POLYGON_API_KEY)만으로 동작.
+    # config.example.json 을 기본 골격으로 사용(스캔/추천 기본값 채움).
+    if os.path.exists(CONFIG_PATH):
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+    elif os.environ.get("POLYGON_API_KEY"):
+        example = os.path.join(BASE_DIR, "config.example.json")
+        cfg = {}
+        if os.path.exists(example):
+            with open(example, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+    else:
         sys.exit(
-            "[오류] config.json 이 없습니다.\n"
-            "       config.example.json 을 config.json 으로 복사하고 "
-            "Polygon API 키를 채워주세요."
+            "[오류] config.json 이 없고 POLYGON_API_KEY 환경변수도 없습니다.\n"
+            "       config.example.json 을 config.json 으로 복사해 키를 채우거나, "
+            "POLYGON_API_KEY 환경변수를 설정하세요."
         )
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        cfg = json.load(f)
 
-    # 환경변수가 있으면 우선 적용 (키를 파일에 두기 싫을 때)
+    # 환경변수가 있으면 우선 적용 (키를 파일에 두기 싫을 때 / CI 시크릿)
     cfg["polygon_api_key"] = os.environ.get("POLYGON_API_KEY", cfg.get("polygon_api_key", "")).strip()
     cfg["finnhub_api_key"] = os.environ.get("FINNHUB_API_KEY", cfg.get("finnhub_api_key", "")).strip()
 
     if not cfg["polygon_api_key"] or "여기에" in cfg["polygon_api_key"]:
-        sys.exit("[오류] config.json 의 polygon_api_key 가 비어 있습니다.")
+        sys.exit("[오류] polygon_api_key 가 비어 있습니다(config.json 또는 POLYGON_API_KEY).")
     return cfg
 
 

@@ -1,0 +1,66 @@
+name: surge-auto-trade
+
+# 거래량폭증 추천 + 프리마켓 자동매매 무인 파이프라인 (run_daily.py).
+# cron 은 UTC. run_daily 는 멱등 — 매 실행이 '그 시점 가능한 일'만 처리:
+#   10:00 UTC(ET 06시): 직전 세션 스캔→픽 생성(희석/공매도 점검·위험제외)
+#   15:00 UTC(ET 10~11시): 프리마켓 매매창(09:29 ET) 종료 후 1·2등 자동매매 기록
+# 주의: 스케줄 트리거는 '기본 브랜치'에서만 발화. 이 워크플로가 기본 브랜치에
+#       머지돼야 cron 이 돈다. 그 전엔 Actions 탭에서 Run workflow(수동)로 실행.
+on:
+  schedule:
+    - cron: "0 10 * * 1-5"
+    - cron: "0 15 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: surge-auto-trade
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: python -m pip install -r requirements.txt
+
+      - name: Check secret
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: |
+          if [ -z "$POLYGON_API_KEY" ]; then
+            echo "::error::POLYGON_API_KEY Secret 미설정. Settings → Secrets and variables → Actions 에 등록하세요."
+            exit 1
+          fi
+          echo "키 확인됨(길이 ${#POLYGON_API_KEY})"
+
+      - name: Run daily pipeline
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+        run: python run_daily.py
+
+      - name: Commit results
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/*.csv output/dashboard.html || true
+          if git diff --cached --quiet; then
+            echo "변경 없음 — 커밋 스킵"
+          else
+            git commit -m "무인 일일 갱신(Actions): $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
