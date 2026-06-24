@@ -19,6 +19,10 @@
     "min_signal_gap_pct": null,
     "top_n": 40,
 
+    "exclude_recent_splits": true,
+    "split_lookback_days": 30,
+    "split_filter_mode": "reverse",
+
     "candle_filter": {
       "lookback": 7,
       "require_verdicts": []

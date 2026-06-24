@@ -43,15 +43,27 @@ jobs:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: python pullback_scanner.py
 
+      - name: 캔들-베이스 교차검증 (후보 축소·신뢰성)
+        run: python candle_verify.py
+
       - name: 자동 검증 (전일 픽 채점)
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: python daily_verify.py
 
+      - name: 윈도우 시뮬 (KST 18:30매수→22:30개장매도, Top5)
+        run: python window_sim.py
+
+      - name: 실매매 저널 채점 (raw, 룰없음)
+        run: python record_trade.py score
+
+      - name: 한눈 대시보드 생성 (DASHBOARD.md)
+        run: python build_dashboard.py
+
       - name: 결과 커밋 & 푸시
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add output/
+          git add output/ DASHBOARD.md
           git diff --staged --quiet || git commit -m "daily scan+verify (UTC $(date -u +%F))"
           git push

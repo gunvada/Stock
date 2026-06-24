@@ -32,6 +32,7 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
 POLY_GROUPED = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/{date}"
+POLY_SPLITS = "https://api.polygon.io/v3/reference/splits"
 FINNHUB_QUOTE = "https://finnhub.io/api/v1/quote"
 
 
@@ -256,6 +257,55 @@ def compute_surge(df, cfg):
 
     res = pd.DataFrame(out).sort_values("ratio", ascending=False)
     return res, latest_date
+
+
+# --------------------------------------------------------------------------- #
+# 분할(스플릿) 필터 — 리버스 스플릿이 만드는 '가짜 급등/가짜 거래량배율' 제거
+# --------------------------------------------------------------------------- #
+def classify_split(split_from, split_to):
+    """split_from > split_to 면 리버스(병합), 아니면 포워드(액면분할)."""
+    return "reverse" if (split_from or 0) > (split_to or 0) else "forward"
+
+
+def split_exclusion_set(splits, mode="reverse"):
+    """splits({ticker: {'type': ...}}) 에서 제외 대상 ticker 집합을 만든다.
+    mode='reverse' → 리버스만, mode='all' → 모든 분할 종목."""
+    return {t for t, info in splits.items()
+            if mode == "all" or info.get("type") == "reverse"}
+
+
+def fetch_recent_splits(api_key, session, gte_date, lte_date):
+    """[gte_date, lte_date] 구간에 '실행된' 분할 목록.
+    반환: {ticker: {'from':int,'to':int,'date':str,'type':'reverse'|'forward'}}.
+    네트워크/HTTP 실패 시 빈 dict(→ 필터 미적용과 동일, 스캔은 계속)."""
+    out = {}
+    url = POLY_SPLITS
+    params = {"execution_date.gte": gte_date, "execution_date.lte": lte_date,
+              "limit": 1000, "apiKey": api_key}
+    for _ in range(10):  # next_url 페이지네이션 안전장치
+        try:
+            r = session.get(url, params=params, timeout=30)
+        except requests.RequestException as e:
+            print(f"  [splits] 네트워크 오류: {e} (분할필터 건너뜀)")
+            break
+        if r.status_code == 429:
+            time.sleep(15)
+            continue
+        if r.status_code != 200:
+            print(f"  [splits] HTTP {r.status_code}: {r.text[:120]} (분할필터 건너뜀)")
+            break
+        data = r.json()
+        for s in data.get("results", []) or []:
+            t, sf, st = s.get("ticker"), s.get("split_from"), s.get("split_to")
+            if not t or not sf or not st:
+                continue
+            out[t] = {"from": sf, "to": st, "date": s.get("execution_date"),
+                      "type": classify_split(sf, st)}
+        nxt = data.get("next_url")
+        if not nxt:
+            break
+        url, params = nxt, {"apiKey": api_key}  # next_url 에 커서 포함, 키만 덧붙임
+    return out
 
 
 # --------------------------------------------------------------------------- #

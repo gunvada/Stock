@@ -1,0 +1,8 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+CRVO,True,3,횡보,"작은몸통양꼬리양봉@D-0, 양봉팽이군@D-0, 꼬리군@D-1",작은몸통양꼬리양봉
+BIRD,True,3,횡보,"작은몸통양꼬리양봉@D-3, 위꼬리양봉@D-2, 양봉팽이군@D-3",-
+SAGT,True,3,하락,"양봉스프링@D-4, 작은몸통양꼬리양봉@D-3, 꼬리군@D-1",-
+ELTX,True,2,횡보,"위꼬리양봉@D-2, 작은몸통양꼬리양봉@D-0",작은몸통양꼬리양봉
+FTHM,True,1,횡보,위꼬리양봉@D-3,-
+LNKS,False,0,하락,-,도지
+PMEC,False,0,하락,-,도지

@@ -17,6 +17,7 @@
 """
 import os
 import sys
+import datetime as dt
 
 import pandas as pd
 import requests
@@ -34,10 +35,13 @@ TP, STOP = 10.0, 8.0  # 익절/손절 %
 
 def main():
     cfg = scanner.load_config()
-    df = build_panel(cfg, requests.Session()).sort_values(["ticker", "date"])
+    session = requests.Session()
+    df = build_panel(cfg, session).sort_values(["ticker", "date"])
+    df["dol"] = df["v"] * df["c"]                  # 일별 거래대금(달러)
     g = df.groupby("ticker")
     df["c_m2"] = g["c"].shift(2)
     df["base_vol"] = g["v"].transform(lambda s: s.shift(1).rolling(7, min_periods=3).median())
+    df["dol_avg10"] = g["dol"].transform(lambda s: s.shift(1).rolling(10, min_periods=5).mean())
     df = df[(df["c"] > 0) & (df["base_vol"] > 0) & (df["o"] > 0) & (df["h"] > df["l"])]
 
     latest = df["date"].max()
@@ -46,6 +50,8 @@ def main():
     day["oc_%"] = (day["c"] - day["o"]) / day["o"] * 100
     day["run2d_%"] = (day["c"] / day["c_m2"] - 1) * 100
     day["dol_M"] = day["v"] * day["c"] / 1e6
+    day["dol_avg10_M"] = day["dol_avg10"] / 1e6                      # 10일 평균 거래대금($M)
+    day["dol_x"] = day["dol"] / day["dol_avg10"].where(day["dol_avg10"] > 0)  # 거래대금 증가 배율
     day["close_pos"] = (day["c"] - day["l"]) / (day["h"] - day["l"])
 
     cand = day[(day["vol_ratio"] >= 10)
@@ -54,16 +60,33 @@ def main():
                & (day["dol_M"] >= 2)
                & (day["run2d_%"] < 100)].copy()
 
+    # 리버스 스플릿 필터: 역분할은 '가짜 급등/가짜 거래량배율'을 만들어 후보를 오염시킴.
+    sc = cfg["scan"]
+    if sc.get("exclude_recent_splits", True) and not cand.empty:
+        look = int(sc.get("split_lookback_days", 30))
+        mode = sc.get("split_filter_mode", "reverse")  # 'reverse' | 'all'
+        d0 = dt.date.fromisoformat(latest)
+        splits = scanner.fetch_recent_splits(
+            cfg["polygon_api_key"], session,
+            (d0 - dt.timedelta(days=look)).isoformat(),
+            (d0 + dt.timedelta(days=5)).isoformat())
+        bad = scanner.split_exclusion_set(splits, mode) & set(cand["ticker"])
+        if bad:
+            tag = ", ".join(f"{t}({splits[t]['type']} {splits[t]['from']}:{splits[t]['to']} {splits[t]['date']})"
+                            for t in sorted(bad))
+            print(f"  [분할필터] 최근 분할 종목 {len(bad)}개 제외 → {tag}")
+            cand = cand[~cand["ticker"].isin(bad)]
+
     # 매매 플랜
     cand["매수참고"] = cand["c"].round(3)          # 다음날 시초/VWAP회복 부근
     cand["손절"] = (cand["l"] * 0.97).round(3)      # 당일 저가 -3% 하회
     cand["익절목표"] = (cand["c"] * (1 + TP / 100)).round(3)
     cand = cand.sort_values("dol_M", ascending=False)
 
-    cols_csv = ["ticker", "c", "oc_%", "vol_ratio", "dol_M", "run2d_%",
-                "close_pos", "매수참고", "손절", "익절목표"]
+    cols_csv = ["ticker", "c", "oc_%", "vol_ratio", "dol_M", "dol_avg10_M", "dol_x",
+                "run2d_%", "close_pos", "매수참고", "손절", "익절목표"]
     out = cand[cols_csv].copy()
-    for c in ["oc_%", "vol_ratio", "dol_M", "run2d_%"]:
+    for c in ["oc_%", "vol_ratio", "dol_M", "dol_avg10_M", "dol_x", "run2d_%"]:
         out[c] = out[c].round(1)
     out["close_pos"] = out["close_pos"].round(2)
     path = os.path.join(scanner.OUTPUT_DIR, f"pullback_{latest}.csv")
@@ -77,7 +100,8 @@ def main():
         print("  조건 충족 종목 없음. (해당일에 흡수 셋업이 없었음 — 정상)")
     else:
         disp = out.rename(columns={"c": "종가", "oc_%": "당일%", "vol_ratio": "거래량배",
-                                   "dol_M": "거래대금M", "run2d_%": "2일%", "close_pos": "마감강도"})
+                                   "dol_M": "거래대금M", "dol_avg10_M": "평균거래대금M(10일)",
+                                   "dol_x": "거래대금배", "run2d_%": "2일%", "close_pos": "마감강도"})
         print(disp.to_string(index=False))
         print("-" * 92)
         print(f"  {len(out)}개 추출.  과거 동일셋업 통계: 다음날 승률 60% · +10%도달 57% · 기대값 +2.1%/거래")
