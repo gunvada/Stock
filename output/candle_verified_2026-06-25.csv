@@ -1,0 +1,10 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+WEN,True,2,횡보,"작은몸통양꼬리양봉@D-3, 위꼬리양봉@D-0",위꼬리양봉
+ELME,True,2,하락,"양봉스프링@D-0, 꼬리군@D-1",양봉스프링
+PRQR,True,2,하락,"위꼬리양봉@D-3, 꼬리군@D-1",도지
+PASG,True,2,하락,"위꼬리양봉@D-4, 위꼬리양봉@D-0",위꼬리양봉
+VIVK,True,2,하락,"양봉스프링@D-3, 작은몸통양꼬리양봉@D-0",작은몸통양꼬리양봉
+IVF,True,1,하락,위꼬리양봉@D-0,위꼬리양봉
+HTZ,False,0,하락,-,-
+INVE,False,0,횡보,-,-
+ARMP,False,0,횡보,-,-
