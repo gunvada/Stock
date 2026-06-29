@@ -1,30 +1,30 @@
 ﻿ticker,pass,n_signals,trend,recent_signals,last_candle
-SCAG,True,4,하락,"작은몸통양꼬리양봉@D-3, 위꼬리양봉@D-2, 상승펀치@D-1, 양봉팽이군@D-3",-
-NAUT,True,3,횡보,"작은몸통양꼬리양봉@D-4, 위꼬리양봉@D-3, 꼬리군@D-1",-
-EP,True,3,횡보,"작은몸통양꼬리양봉@D-1, 양봉팽이군@D-1, 꼬리군@D-0",-
-AARD,True,2,하락,"위꼬리양봉@D-3, 꼬리군@D-0",-
-LCUT,True,2,상승,"위꼬리양봉@D-3, 꼬리군@D-1",-
-PNBK,True,2,하락,"작은몸통양꼬리양봉@D-4, 꼬리군@D-1",음봉스프링
-FSP,True,2,하락,"위꼬리양봉@D-1, 꼬리군@D-1",-
-CLPR,True,2,하락,"위꼬리양봉@D-4, 꼬리군@D-1",-
-SIEB,True,2,하락,"작은몸통양꼬리양봉@D-1, 양봉팽이군@D-1",음봉스프링
-JYNT,True,1,횡보,꼬리군@D-1,-
-HYPR,True,1,상승,양봉스프링@D-1,-
-FBYD,True,1,상승,꼬리군@D-1,-
-PBK,True,1,하락,꼬리군@D-1,-
-GAIA,True,1,하락,꼬리군@D-1,-
+SCAG,True,3,하락,"작은몸통양꼬리양봉@D-4, 위꼬리양봉@D-3, 상승펀치@D-2",-
+FSP,True,3,하락,"위꼬리양봉@D-2, 작은몸통양꼬리양봉@D-0, 꼬리군@D-1",작은몸통양꼬리양봉
+EP,True,3,횡보,"작은몸통양꼬리양봉@D-2, 양봉팽이군@D-2, 꼬리군@D-1",-
+LCUT,True,2,상승,"위꼬리양봉@D-4, 꼬리군@D-1",-
+PBK,True,2,하락,"작은몸통양꼬리양봉@D-0, 꼬리군@D-1",작은몸통양꼬리양봉
+SIEB,True,2,하락,"작은몸통양꼬리양봉@D-2, 양봉팽이군@D-2",도지
+AARD,True,2,하락,"위꼬리양봉@D-4, 꼬리군@D-0",-
+NAUT,True,2,횡보,"위꼬리양봉@D-4, 꼬리군@D-1",-
 BTMD,True,1,횡보,꼬리군@D-1,-
-CSPI,True,1,하락,위꼬리양봉@D-3,음봉스프링
+JYNT,True,1,하락,꼬리군@D-1,-
+FBYD,True,1,상승,꼬리군@D-1,-
+HYPR,True,1,상승,양봉스프링@D-2,-
+QUCY,True,1,상승,작은몸통양꼬리양봉@D-0,작은몸통양꼬리양봉
+CLPR,True,1,하락,꼬리군@D-1,-
+GAIA,True,1,하락,꼬리군@D-2,-
+CSPI,True,1,하락,위꼬리양봉@D-4,-
 HFFG,True,1,하락,꼬리군@D-1,-
-AEYE,True,1,하락,위꼬리양봉@D-2,-
-SLQT,True,1,하락,꼬리군@D-1,-
-QUCY,False,0,상승,-,-
+AEYE,True,1,하락,위꼬리양봉@D-3,-
 ZDAI,False,0,하락,-,-
-VIRC,False,0,횡보,-,-
-ORMP,False,0,상승,-,-
 LYEL,False,0,하락,-,-
+ORMP,False,0,상승,-,도지
+VIRC,False,0,횡보,-,-
+SLQT,False,0,하락,-,-
 NEXR,False,0,하락,-,-
-LNSR,False,0,하락,-,음봉스프링
+PNBK,False,0,하락,-,-
+LNSR,False,0,하락,-,-
 FTLF,False,0,하락,-,-
-ISPR,False,0,하락,-,-
-KG,False,0,횡보,-,음봉스프링
+ISPR,False,0,하락,-,음봉스프링
+KG,False,0,횡보,-,-
