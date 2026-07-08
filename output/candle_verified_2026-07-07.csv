@@ -1,0 +1,7 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+SILO,True,3,상승,"작은몸통양꼬리양봉@D-2, 양봉팽이군@D-2, 꼬리군@D-1",-
+TDTH,True,1,하락,양봉스프링@D-4,-
+ALAR,True,1,횡보,작은몸통양꼬리양봉@D-2,도지
+BJDX,False,0,횡보,-,-
+VTAK,False,0,횡보,-,-
+BTAI,False,0,하락,-,음봉스프링
