@@ -1,0 +1,6 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+SHPH,True,1,하락,작은몸통양꼬리양봉@D-2,-
+CANF,True,1,하락,꼬리군@D-1,-
+IBX,False,0,불명,-,-
+QTTB,False,0,상승,-,음봉스프링
+TOON,False,0,횡보,-,-
