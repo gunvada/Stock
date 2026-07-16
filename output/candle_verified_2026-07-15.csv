@@ -1,0 +1,8 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+GCTK,True,2,하락,"양봉스프링@D-4, 작은몸통양꼬리양봉@D-0",작은몸통양꼬리양봉
+KAPA,True,1,하락,꼬리군@D-0,-
+KUST,True,1,하락,작은몸통양꼬리양봉@D-2,도지
+IBX,False,0,불명,-,-
+QTTB,False,0,상승,-,-
+PHIO,False,0,횡보,-,-
+XCUR,False,0,하락,-,-
