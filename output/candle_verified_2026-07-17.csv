@@ -1,7 +1,7 @@
 ﻿ticker,pass,n_signals,trend,recent_signals,last_candle
-OPI,True,3,불명,"작은몸통양꼬리양봉@D-2, 작은몸통양꼬리양봉@D-1, 양봉팽이군@D-1",-
-GLXG,True,3,하락,"작은몸통양꼬리양봉@D-3, 작은몸통양꼬리양봉@D-2, 양봉팽이군@D-2",-
-PMAX,True,1,하락,꼬리군@D-1,-
+OPI,True,4,불명,"작은몸통양꼬리양봉@D-3, 작은몸통양꼬리양봉@D-2, 위꼬리양봉@D-0, 양봉팽이군@D-2",위꼬리양봉
+GLXG,True,3,하락,"작은몸통양꼬리양봉@D-4, 작은몸통양꼬리양봉@D-3, 양봉팽이군@D-3",도지
+PMAX,False,0,하락,-,-
 FGMC,False,0,횡보,-,-
 TRUG,False,0,하락,-,-
-ISUL,False,0,하락,-,음봉스프링
+ISUL,False,0,하락,-,-
