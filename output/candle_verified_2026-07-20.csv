@@ -1,0 +1,6 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+WBUY,True,3,하락,"작은몸통양꼬리양봉@D-4, 양봉스프링@D-0, 꼬리군@D-1",양봉스프링
+RCON,True,1,하락,꼬리군@D-1,-
+SLND,True,1,하락,위꼬리양봉@D-4,-
+CJMB,True,1,횡보,작은몸통양꼬리양봉@D-4,-
+GOAI,False,0,하락,-,-
