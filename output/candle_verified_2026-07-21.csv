@@ -1,0 +1,7 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+ZNB,True,3,하락,"작은몸통양꼬리양봉@D-4, 작은몸통양꼬리양봉@D-2, 양봉팽이군@D-2",-
+SLGB,True,2,횡보,"작은몸통양꼬리양봉@D-3, 양봉팽이군@D-3",도지
+IMNN,True,1,하락,작은몸통양꼬리양봉@D-2,-
+LASE,False,0,횡보,-,-
+AEHL,False,0,하락,-,-
+ADVB,False,0,상승,-,-
