@@ -1,0 +1,6 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+DOMO,True,3,횡보,"작은몸통양꼬리양봉@D-3, 양봉팽이군@D-3, 꼬리군@D-1",-
+SMCZ,True,2,하락,"양봉스프링@D-4, 작은몸통양꼬리양봉@D-0",작은몸통양꼬리양봉
+ACI,False,0,하락,-,-
+PLAG,False,0,하락,-,-
+LABT,False,0,불명,-,-
