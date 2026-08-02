@@ -12,3 +12,6 @@ tmp_*.py
 
 # 로컬 Claude 설정 (프로젝트 무관)
 .claude/
+
+# 세션 전용 스크래치패드(프록시 우회 shim 등, 환경 종속)
+scratchpad/
