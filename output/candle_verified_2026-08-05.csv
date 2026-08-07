@@ -1,0 +1,7 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+AZI,True,2,하락,"작은몸통양꼬리양봉@D-3, 꼬리군@D-1",-
+CLRO,True,1,상승,꼬리군@D-2,-
+SHPU,True,1,횡보,양봉스프링@D-2,-
+GTE,False,0,횡보,-,도지
+VMAR,False,0,하락,-,-
+VNRX,False,0,하락,-,-
