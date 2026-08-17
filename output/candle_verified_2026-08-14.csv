@@ -1,6 +1,6 @@
 ﻿ticker,pass,n_signals,trend,recent_signals,last_candle
-IVDA,True,2,횡보,"작은몸통양꼬리양봉@D-3, 양봉팽이군@D-3",-
-CAPR,True,1,하락,작은몸통양꼬리양봉@D-3,-
-OTLK,True,1,횡보,양봉스프링@D-1,-
-IDN,True,1,하락,작은몸통양꼬리양봉@D-1,-
+IDN,True,2,하락,"작은몸통양꼬리양봉@D-2, 작은몸통양꼬리양봉@D-0",작은몸통양꼬리양봉
+CAPR,True,1,하락,작은몸통양꼬리양봉@D-4,-
+OTLK,True,1,횡보,양봉스프링@D-2,음봉스프링
+IVDA,True,1,횡보,작은몸통양꼬리양봉@D-4,-
 CGTL,False,0,하락,-,-
