@@ -1,0 +1,9 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+GNPX,True,2,하락,"위꼬리양봉@D-0, 꼬리군@D-1",위꼬리양봉
+BIAF,True,1,하락,위꼬리양봉@D-3,-
+UCL,True,1,하락,꼬리군@D-1,-
+BIDG,True,1,하락,꼬리군@D-1,-
+TGL,False,0,하락,-,-
+WFF,False,0,횡보,-,-
+IVF,False,0,하락,-,-
+TWG,False,0,하락,-,-
