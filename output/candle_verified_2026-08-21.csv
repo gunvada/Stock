@@ -1,6 +1,6 @@
 ﻿ticker,pass,n_signals,trend,recent_signals,last_candle
-YJ,True,1,상승,작은몸통양꼬리양봉@D-4,-
-SDEV,True,1,하락,작은몸통양꼬리양봉@D-1,-
-GYGY,True,1,불명,위꼬리양봉@D-2,-
-JATT,False,0,불명,-,도지
+SDEV,True,1,하락,작은몸통양꼬리양봉@D-2,-
+GYGY,True,1,불명,위꼬리양봉@D-3,-
+YJ,False,0,상승,-,-
+JATT,False,0,불명,-,-
 ISPC,False,0,하락,-,-
