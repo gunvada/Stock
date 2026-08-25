@@ -1,0 +1,8 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+BCTX,True,2,횡보,"위꼬리양봉@D-2, 꼬리군@D-1",-
+NIKI,True,2,횡보,"작은몸통양꼬리양봉@D-2, 양봉팽이군@D-2",-
+JEM,True,2,하락,"작은몸통양꼬리양봉@D-4, 위꼬리양봉@D-0",위꼬리양봉
+WLDS,True,1,하락,작은몸통양꼬리양봉@D-3,-
+LGHL,True,1,하락,위꼬리양봉@D-3,-
+SDEV,True,1,하락,작은몸통양꼬리양봉@D-3,도지
+OLOX,False,0,하락,-,-
