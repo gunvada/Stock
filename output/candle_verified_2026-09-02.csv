@@ -1,0 +1,9 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+TLYS,True,3,횡보,"위꼬리양봉@D-4, 상승다람쥐@D-2, 꼬리군@D-0",-
+UPC,True,1,상승,꼬리군@D-0,-
+LHAI,False,0,횡보,-,-
+NCT,False,0,횡보,-,음봉스프링
+VIVK,False,0,하락,-,-
+JLHL,False,0,횡보,-,도지
+KITT,False,0,하락,-,도지
+EDHL,False,0,상승,-,-
