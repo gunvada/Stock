@@ -46,7 +46,10 @@ def review_one(code, rec_date, entry, stop):
     # 추천일 '다음날'부터의 경로(추천일 종가 이후 실제 성과)
     after = df[df.index > pd.to_datetime(rec_date)]
     if after.empty:
-        after = df.tail(1)
+        # 추천 후 새 거래일이 아직 없음(주말/휴장 직후). 진입일 봉의 장중 고저를
+        # 보유 성과로 오보하지 않도록 '성과 없음(0일)'으로 정직하게 반환한다.
+        return {"cur": round(float(df["Close"].iloc[-1]), 0), "ret_%": 0.0,
+                "MFE_%": None, "MAE_%": None, "stop_hit": "", "days": 0}
     cur = float(after["Close"].iloc[-1])
     hi = float(after["High"].max())
     lo = float(after["Low"].min())
