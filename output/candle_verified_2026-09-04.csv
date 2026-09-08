@@ -1,9 +1,9 @@
 ﻿ticker,pass,n_signals,trend,recent_signals,last_candle
-OFAL,True,1,하락,작은몸통양꼬리양봉@D-2,-
-ATER,True,1,하락,위꼬리양봉@D-2,-
-NIKI,True,1,하락,작은몸통양꼬리양봉@D-4,-
-RACC,True,1,불명,꼬리군@D-1,-
-SVRN,True,1,횡보,양봉스프링@D-2,-
+NIKI,True,2,하락,"작은몸통양꼬리양봉@D-0, 양봉팽이군@D-0",작은몸통양꼬리양봉
+ATER,True,2,하락,"위꼬리양봉@D-3, 상승다람쥐@D-0",-
+SVRN,True,2,횡보,"양봉스프링@D-3, 양봉스프링@D-0",양봉스프링
+OFAL,True,1,하락,작은몸통양꼬리양봉@D-3,-
 PATX,True,1,상승,꼬리군@D-1,-
+PLAG,True,1,하락,양봉스프링@D-0,양봉스프링
 BAOS,False,0,하락,-,-
-PLAG,False,0,하락,-,-
+RACC,False,0,불명,-,-
