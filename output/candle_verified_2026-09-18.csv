@@ -1,0 +1,13 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+FRBT,True,2,불명,"위꼬리양봉@D-1, 꼬리군@D-1",-
+YCBD,True,2,하락,"작은몸통양꼬리양봉@D-2, 꼬리군@D-1",-
+VRME,True,2,횡보,"위꼬리양봉@D-3, 꼬리군@D-1",-
+TUYA,True,2,하락,"위꼬리양봉@D-1, 꼬리군@D-1",-
+EVO,True,2,하락,"작은몸통양꼬리양봉@D-3, 양봉팽이군@D-3",-
+DTSS,True,1,횡보,위꼬리양봉@D-4,-
+NHIC,True,1,횡보,작은몸통양꼬리양봉@D-4,음봉스프링
+NKLR,False,0,횡보,-,-
+DAIC,False,0,횡보,-,-
+SOHU,False,0,하락,-,-
+KXIN,False,0,하락,-,-
+MNDR,False,0,하락,-,-
