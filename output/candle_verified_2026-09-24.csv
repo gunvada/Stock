@@ -1,0 +1,9 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+WETO,True,2,하락,"위꼬리양봉@D-3, 꼬리군@D-1",-
+PARA,True,2,하락,"작은몸통양꼬리양봉@D-1, 꼬리군@D-1",도지
+OFAL,True,1,하락,상승다람쥐@D-2,-
+SKYQ,True,1,하락,꼬리군@D-1,-
+BFRG,True,1,횡보,작은몸통양꼬리양봉@D-2,-
+FTHM,True,1,하락,꼬리군@D-1,음봉스프링
+PFSA,False,0,하락,-,-
+JZ,False,0,하락,-,-
