@@ -43,6 +43,9 @@ def review_one(code, rec_date, entry, stop):
     if df is None or df.empty:
         return {"error": "no data"}
     df = df.dropna(subset=["Close"])
+    # 거래정지일 등 FDR 이 0 가격 봉을 주는 경우가 있다(O/H/L=0, V=0).
+    # 그대로 두면 MAE 가 -100%, 손절터치 오탐. 가격 0 인 봉은 성과 계산에서 제외.
+    df = df[(df["Low"] > 0) & (df["Close"] > 0)]
     # 추천일 '다음날'부터의 경로(추천일 종가 이후 실제 성과)
     after = df[df.index > pd.to_datetime(rec_date)]
     if after.empty:
