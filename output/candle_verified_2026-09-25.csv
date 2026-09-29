@@ -1,7 +1,7 @@
 ﻿ticker,pass,n_signals,trend,recent_signals,last_candle
-ONCO,True,2,하락,"작은몸통양꼬리양봉@D-4, 위꼬리양봉@D-2",-
-RDGT,True,2,하락,"작은몸통양꼬리양봉@D-2, 꼬리군@D-1",-
-FTHM,True,1,하락,꼬리군@D-1,-
+ONCO,True,2,하락,"위꼬리양봉@D-3, 꼬리군@D-0",-
+RDGT,True,2,하락,"작은몸통양꼬리양봉@D-3, 꼬리군@D-2",-
+EDHL,True,1,상승,작은몸통양꼬리양봉@D-0,작은몸통양꼬리양봉
 KDK,False,0,하락,-,-
-LGO,False,0,하락,-,-
-EDHL,False,0,상승,-,-
+FTHM,False,0,하락,-,-
+LGO,False,0,하락,-,음봉스프링
