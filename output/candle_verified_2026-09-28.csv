@@ -1,0 +1,11 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+SHMD,True,5,하락,"작은몸통양꼬리양봉@D-4, 작은몸통양꼬리양봉@D-3, 위꼬리양봉@D-1, 양봉팽이군@D-3, 꼬리군@D-2",-
+WBUY,True,2,하락,"작은몸통양꼬리양봉@D-1, 양봉팽이군@D-1",-
+ONCO,True,2,하락,"위꼬리양봉@D-3, 꼬리군@D-0",-
+MIMI,True,2,하락,"위꼬리양봉@D-2, 꼬리군@D-1",-
+LGPS,True,1,횡보,꼬리군@D-1,-
+CLRO,False,0,상승,-,-
+NAMI,False,0,하락,-,-
+MGLD,False,0,횡보,-,음봉스프링
+LONA,False,0,하락,-,-
+AKAL,False,0,불명,-,음봉스프링
