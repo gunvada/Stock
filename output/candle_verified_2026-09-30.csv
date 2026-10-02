@@ -1,0 +1,8 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+AEON,True,2,하락,"작은몸통양꼬리양봉@D-3, 꼬리군@D-1",-
+DKI,True,2,횡보,"작은몸통양꼬리양봉@D-3, 꼬리군@D-1",-
+AIB,True,1,횡보,상승다람쥐@D-1,-
+TARA,True,1,하락,꼬리군@D-1,-
+EDHL,True,1,상승,작은몸통양꼬리양봉@D-2,-
+JBLG,True,1,불명,꼬리군@D-0,-
+SOAR,False,0,횡보,-,-
