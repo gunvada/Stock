@@ -1,0 +1,4 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+MASK,True,1,하락,꼬리군@D-1,-
+IPW,False,0,하락,-,-
+UPLD,False,0,하락,-,-
