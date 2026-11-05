@@ -1,0 +1,7 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+INLF,True,1,하락,위꼬리양봉@D-1,-
+ONEG,True,1,횡보,양봉스프링@D-4,-
+PRFX,True,1,하락,꼬리군@D-1,음봉스프링
+ICU,True,1,하락,꼬리군@D-0,-
+STVN,False,0,횡보,-,-
+DTST,False,0,하락,-,-
