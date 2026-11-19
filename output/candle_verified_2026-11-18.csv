@@ -1,0 +1,5 @@
+﻿ticker,pass,n_signals,trend,recent_signals,last_candle
+PALD,True,4,하락,"위꼬리양봉@D-3, 위꼬리양봉@D-2, 위꼬리양봉@D-1, 꼬리군@D-1",음봉스프링
+GMM,True,2,하락,"작은몸통양꼬리양봉@D-3, 양봉팽이군@D-3",-
+FCHL,True,1,하락,위꼬리양봉@D-4,-
+NSTR,False,0,불명,-,-
