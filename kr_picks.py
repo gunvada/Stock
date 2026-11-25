@@ -72,12 +72,16 @@ def main():
     v = pd.read_csv(vp)
     s["code"] = s["code"].str.zfill(6)
     v["code"] = v["sym"].astype(str).str.split(".").str[0].str.zfill(6)
-    m = s.merge(v[["code", "sym", "verdict", "signals", "base", "pos_in_base_%", "drop_peak_%"]],
+    m = s.merge(v[["code", "sym", "verdict", "signals", "base", "pos_in_base_%", "drop_peak_%",
+                   "last_candle"]],
                 on="code", how="inner")
 
     # PRIME 우선, 없으면 PASS. 폭증배율 순. 상한가(+30% 근처)는 추격위험 표시.
     order = {"✅✅ PRIME": 0, "✅ PASS": 1}
     m = m[m["verdict"].isin(order)].copy()
+    # 당일신호 게이트 (kr_score 와 동일 기준): 폭증 당일 봉에 상승 캔들이 떠야 후보.
+    m = m[m["last_candle"].astype(str).apply(
+        lambda t: any(x.strip() in cp.BULLISH_LABELS for x in t.split(",")))].copy()
     m["_o"] = m["verdict"].map(order)
     m = m.sort_values(["_o", "ratio"], ascending=[True, False]).head(TOP_N)
 

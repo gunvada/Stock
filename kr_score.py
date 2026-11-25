@@ -119,9 +119,20 @@ def main():
     s = pd.read_csv(sp, dtype={"code": str}); v = pd.read_csv(vp)
     s["code"] = s["code"].str.zfill(6)
     v["code"] = v["sym"].astype(str).str.split(".").str[0].str.zfill(6)
-    m = s.merge(v[["code", "sym", "verdict", "signals", "base", "pos_in_base_%", "drop_peak_%"]],
+    m = s.merge(v[["code", "sym", "verdict", "signals", "base", "pos_in_base_%", "drop_peak_%",
+                   "last_candle"]],
                 on="code", how="inner")
     m = m[m["verdict"].isin(["✅✅ PRIME", "✅ PASS"])].copy()
+    # 당일신호 게이트: 상승 캔들 신호가 '폭증 당일' 봉에서 떠야 한다.
+    # 5일 룩백으로 잡힌 옛 신호를 폭증일에 갖다 붙이면 끝물(위꼬리 유성형)을 사게 된다.
+    # 장부 26건 역산: 당일신호 有 평균 +22.3% / 無 -13.5% (단, 표본 작고 넥사 의존).
+    m["same_day"] = m["last_candle"].astype(str).apply(
+        lambda t: any(x.strip() in cp.BULLISH_LABELS for x in t.split(",")))
+    dropped = m[~m["same_day"]]
+    m = m[m["same_day"]].copy()
+    if not dropped.empty:
+        print(f"[게이트] 당일신호 없음 → 제외 {len(dropped)}종: "
+              + ", ".join(dropped.sort_values("ratio", ascending=False)["name"].head(8)))
     m = m.sort_values("ratio", ascending=False).head(TOP_N)
 
     print(f"[평가] 후보 {len(m)}종 점수 산출 (손절·리스크 계산 위해 일봉 조회)...")
